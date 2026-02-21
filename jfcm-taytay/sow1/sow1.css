@@ -1,1 +1,488 @@
-/* SOW 1-specific styles - currently using shared styles */
+/* Empty State Styles (center icon and text) */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 240px;
+  min-height: 200px;
+  width: 100%;
+  background: #fafbfc;
+  border-radius: 10px;
+  animation: fadeIn 0.4s ease;
+}
+.empty-icon {
+  font-size: 3.5rem;
+  color: #cbd5e1;
+  margin-bottom: 16px;
+  animation: float 3s ease-in-out infinite;
+}
+.empty-state p {
+  font-size: 1.08rem;
+  color: #64748b;
+  margin: 0 0 8px 0;
+  font-weight: 500;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+/* Google Drive Account Info Box Styles (copied from teachings.css for parity) */
+.gdrive-account-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 16px;
+  transition: 0.2s ease;
+}
+
+.gdrive-account-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+.gdrive-account-card.empty {
+  justify-content: center;
+  text-align: center;
+  flex-direction: column;
+  gap: 10px;
+}
+.account-label {
+  font-size: 13px;
+  color: #64748b;
+}
+.account-email {
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+}
+.gdrive-actions {
+  display: flex;
+  gap: 10px;
+}
+.btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+  transition: 0.2s ease;
+}
+.btn-primary {
+  background: #2563eb;
+  color: white;
+}
+.btn-primary:hover {
+  background: #1d4ed8;
+}
+.btn-secondary {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+.btn-secondary:hover {
+  background: #cbd5e1;
+}
+
+/* SOW1 page CSS (fully refactored from teachings.css) */
+
+/* Toast Notifications */
+.toast-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: white;
+  padding: 16px 24px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 10001;
+  transform: translateX(400px);
+  transition: transform 0.3s ease;
+  font-family: "Poppins", sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  max-width: 350px;
+}
+
+.toast-notification.show {
+  transform: translateX(0);
+}
+
+.toast-notification i {
+  font-size: 20px;
+}
+
+.toast-success {
+  border-left: 4px solid #4caf50;
+  color: #2c3e50;
+}
+
+.toast-success i {
+  color: #4caf50;
+}
+
+.toast-error {
+  border-left: 4px solid #f44336;
+  color: #2c3e50;
+}
+
+.toast-error i {
+  color: #f44336;
+}
+
+.toast-info {
+  border-left: 4px solid #2196f3;
+  color: #2c3e50;
+}
+
+.toast-info i {
+  color: #2196f3;
+}
+
+/* SOW1 Upload Modal */
+/* Match Teachings modal z-index for correct stacking */
+.modal,
+#uploadModal.sow1-modal,
+.sow1-modal {
+  display: none;
+  position: fixed;
+  z-index: 1000 !important;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease;
+}
+
+
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-content {
+  background: #fff;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease;
+  position: relative;
+  z-index: 10001;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 28px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-family: "Poppins", sans-serif;
+  font-size: 22px;
+  color: #2c3e50;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-header h2 i {
+  color: #667eea;
+}
+
+.close-modal {
+  font-size: 32px;
+  color: #95a5a6;
+  cursor: pointer;
+  line-height: 1;
+  transition: all 0.2s ease;
+}
+
+.close-modal:hover {
+  color: #e74c3c;
+  transform: rotate(90deg);
+}
+
+.modal-body {
+  padding: 28px;
+}
+
+.upload-section {
+  margin-bottom: 28px;
+}
+
+.upload-section h3 {
+  font-family: "Poppins", sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0 0 12px 0;
+}
+
+.file-drop-zone {
+  border: 2px dashed #cbd5e0;
+  border-radius: 12px;
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: #f8f9fa;
+  position: relative;
+}
+
+.file-drop-zone:hover {
+  border-color: #667eea;
+  background: #f3f4ff;
+}
+
+.file-drop-zone.drag-over {
+  border-color: #667eea;
+  background: #e3e7ff;
+  transform: scale(1.02);
+}
+
+.file-drop-zone i {
+  font-size: 48px;
+  color: #cbd5e0;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.file-drop-zone p {
+  margin: 0;
+  color: #7f8c8d;
+  font-size: 14px;
+}
+
+.selected-file-info {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #fff;
+  border: 2px solid #667eea;
+  border-radius: 8px;
+}
+
+.selected-file-info i {
+  font-size: 24px;
+  color: #667eea;
+  margin: 0;
+}
+
+.selected-file-info span {
+  flex: 1;
+  color: #2c3e50;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.remove-file-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: #ffebee;
+  color: #d32f2f;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.remove-file-btn:hover {
+  background: #d32f2f;
+  color: #fff;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-family: "Poppins", sans-serif;
+  font-size: 14px;
+  color: #2c3e50;
+  background: #fff;
+  transition: all 0.2s ease;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-input::placeholder {
+  color: #a0aec0;
+}
+
+.form-input:invalid:not(:placeholder-shown) {
+  border-color: #e74c3c;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #2c3e50;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.modal-footer {
+  padding: 20px 28px;
+  border-top: 2px solid #f0f0f0;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.modal-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-family: "Poppins", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.cancel-btn {
+  background: #e8eaed;
+  color: #5f6368;
+}
+
+.cancel-btn:hover {
+  background: #d2d5d9;
+}
+
+.upload-btn-modal {
+  background: linear-gradient(135deg, #3a4d2c 0%, #263820 100%);
+  color: #fff;
+}
+
+.upload-btn-modal:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.upload-btn-modal:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .modal-content {
+    width: 95%;
+    max-height: 90vh;
+  }
+  .modal-header {
+    padding: 20px;
+  }
+  .modal-header h2 {
+    font-size: 18px;
+  }
+  .modal-body {
+    padding: 20px;
+  }
+  .file-drop-zone {
+    padding: 30px 15px;
+  }
+  .file-drop-zone i {
+    font-size: 36px;
+  }
+  .modal-footer {
+    padding: 16px 20px;
+    flex-direction: column;
+  }
+  .modal-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+.auth-gdrive-btn {
+  padding: 12px 28px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #4285f4 0%, #3367d6 100%);
+  color: white;
+  font-family: "Poppins", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(66, 133, 244, 0.3);
+}
+
+.auth-gdrive-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #3367d6 0%, #2851a3 100%);
+  box-shadow: 0 4px 12px rgba(66, 133, 244, 0.4);
+  transform: translateY(-2px);
+}
+
+.auth-gdrive-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.auth-gdrive-btn i {
+  font-size: 16px;
+}

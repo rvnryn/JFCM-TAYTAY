@@ -44,6 +44,7 @@
           "
         >
           <div
+            id="sidebar-user-avatar"
             style="
               width: 48px;
               height: 48px;
@@ -61,6 +62,7 @@
           </div>
           <div style="flex: 1; min-width: 0">
             <p
+              id="sidebar-user-name"
               style="
                 margin: 0;
                 color: #fff;
@@ -71,9 +73,10 @@
                 line-height: 1.2;
               "
             >
-              Marie Rye Detera
+              Loading...
             </p>
             <p
+              id="sidebar-user-role"
               style="
                 margin: 0;
                 color: rgba(255, 255, 255, 0.8);
@@ -82,7 +85,7 @@
                 word-break: break-word;
               "
             >
-              Admin
+              User
             </p>
           </div>
         </div>
@@ -124,7 +127,7 @@
             ><i class="fas fa-user-circle"></i>Profile</a
           >
           <a href="../user-management/index.html"
-            ><i class="fas fa-users"></i>User Management</a
+            class="admin-only"><i class="fas fa-users"></i>User Management</a
           >
           <a href="../login/login.html" class="logout-btn"
             ><i class="fas fa-sign-out-alt"></i>Logout</a
@@ -159,6 +162,7 @@
       </div>
     </main>
 
+    <script src="../config.js"></script>
     <script src="../dashboard/shared-script.js"></script>
     <script src="modules.js"></script>
   </body>

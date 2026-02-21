@@ -44,6 +44,7 @@
           "
         >
           <div
+            id="sidebar-user-avatar"
             style="
               width: 48px;
               height: 48px;
@@ -61,6 +62,7 @@
           </div>
           <div style="flex: 1; min-width: 0">
             <p
+              id="sidebar-user-name"
               style="
                 margin: 0;
                 color: #fff;
@@ -71,9 +73,10 @@
                 line-height: 1.2;
               "
             >
-              Marie Rye Detera
+              Loading...
             </p>
             <p
+              id="sidebar-user-role"
               style="
                 margin: 0;
                 color: rgba(255, 255, 255, 0.8);
@@ -82,7 +85,7 @@
                 word-break: break-word;
               "
             >
-              Admin
+              User
             </p>
           </div>
         </div>
@@ -125,7 +128,7 @@
             ><i class="fas fa-user-circle"></i>Profile</a
           >
           <a href="../user-management/index.html"
-            ><i class="fas fa-users"></i>User Management</a
+            class="admin-only"><i class="fas fa-users"></i>User Management</a
           >
           <a href="../login/login.html" class="logout-btn"
             ><i class="fas fa-sign-out-alt"></i>Logout</a
@@ -137,39 +140,39 @@
     <main class="dashboard-main">
       <h1 class="dashboard-title">Teachings</h1>
 
+      <div
+        id="connectedGoogleAccountInfo"
+        style="margin: 16px 0; font-size: 14px; color: #4285f4"
+      ></div>
+
       <div class="content-section">
-        <div class="search-container">
-          <input type="text" class="search-bar" placeholder="Search here..." />
+        <div class="search-container" style="position: relative;">
+          <input type="text" class="search-bar" id="searchInput" placeholder="Search titles..." autocomplete="off" />
           <i class="fas fa-search search-icon"></i>
+          <div id="searchSuggestions" class="search-suggestions" style="display: none;"></div>
         </div>
 
         <div class="controls-container">
           <div class="filters">
             <div class="filter-group">
               <label class="filter-label">Topic</label>
-              <select class="filter-select">
-                <option>Choose topic</option>
+              <select id="topicFilter" class="filter-select">
+                <option value="all">All Topics</option>
               </select>
             </div>
 
             <div class="filter-group">
               <label class="filter-label">Sort</label>
-              <select class="filter-select">
-                <option>Newest</option>
-                <option>Oldest</option>
+              <select id="sortFilter" class="filter-select">
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
               </select>
             </div>
           </div>
 
-          <button class="upload-btn">
+          <button class="upload-btn admin-only" id="uploadBtn">
             <i class="fas fa-upload"></i> Upload
           </button>
-          <input
-            type="file"
-            id="fileInput"
-            class="file-input"
-            style="display: none"
-          />
         </div>
       </div>
 
@@ -181,10 +184,172 @@
       </div>
     </main>
 
-    <script src="../dashboard/shared-script.js"></script>
+    <!-- Upload Modal -->
+    <div id="uploadModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2><i class="fas fa-cloud-upload-alt"></i> Upload Teaching</h2>
+          <span class="close-modal">&times;</span>
+        </div>
+
+        <div class="modal-body">
+          <!-- File Selection Area -->
+          <div class="upload-section">
+            <h3>Select File</h3>
+            <div class="file-drop-zone" id="fileDropZone">
+              <i class="fas fa-file-upload"></i>
+              <p>Drag & drop file here or click to browse</p>
+              <input type="file" id="modalFileInput" style="display: none" />
+              <div
+                id="selectedFileInfo"
+                class="selected-file-info"
+                style="display: none"
+              >
+                <i class="fas fa-file"></i>
+                <span id="selectedFileName"></span>
+                <button
+                  type="button"
+                  class="remove-file-btn"
+                  id="removeFileBtn"
+                >
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Title Input -->
+          <div class="upload-section">
+            <h3>Title <span style="color: #e74c3c">*</span></h3>
+            <input
+              type="text"
+              id="teachingTitle"
+              class="form-input"
+              placeholder="Enter title..."
+              maxlength="200"
+              required
+            />
+          </div>
+          <!-- Topic Input -->
+          <div class="upload-section">
+            <h3>Topic <span style="color: #e74c3c">*</span></h3>
+            <input
+              type="text"
+              id="teachingTopic"
+              class="form-input"
+              placeholder="Enter topic (e.g. Faith, Worship, etc.)"
+              maxlength="100"
+              required
+            />
+          </div>
+
+          <!-- Folder Selection Area -->
+          <div class="upload-section" id="folderSelectSection">
+            <h3>Select Google Drive Folder</h3>
+            <!-- Connect Google Drive button (shown when NOT authenticated) -->
+            <div id="gdriveAuthSection" style="margin: 16px 0">
+              <button type="button" class="auth-gdrive-btn" id="authGdriveBtn">
+                <i class="fab fa-google"></i> Connect Google Drive
+              </button>
+            </div>
+            <!-- Picker and helpers (shown when authenticated) -->
+            <button
+              type="button"
+              class="modal-btn upload-btn-modal picker-green-btn"
+              id="openPickerBtn"
+              style="
+                margin-top: 8px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+              "
+              disabled
+            >
+              <i class="fab fa-google-drive" style="color: #fff"></i> Pick from
+              Google Drive
+            </button>
+            <span
+              id="selectedFolderName"
+              style="
+                display: block;
+                margin-top: 8px;
+                color: #4285f4;
+                font-weight: 600;
+              "
+            ></span>
+            <div id="gdriveFolderHelper" style="display: none; margin: 16px 0">
+              <div
+                style="
+                  display: flex;
+                  gap: 10px;
+                  flex-wrap: wrap;
+                  margin-bottom: 8px;
+                "
+              >
+                <button
+                  id="createGdriveFolderBtn"
+                  type="button"
+                  class="modal-btn upload-btn-modal folder-purple-btn"
+                  style="display: flex; align-items: center; gap: 8px"
+                >
+                  <i class="fas fa-folder-plus" style="color: #fff"></i> Create
+                  Folder in Google Drive
+                </button>
+                <button
+                  id="refreshGdriveFoldersBtn"
+                  type="button"
+                  class="modal-btn"
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    background: #e8eaed;
+                    color: #5f6368;
+                  "
+                >
+                  <i class="fas fa-sync-alt"></i> Refresh Folders
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Options -->
+          <div class="upload-section">
+            <label class="checkbox-label">
+              <input type="checkbox" id="makePublicCheckbox" checked />
+              <span>Make file publicly accessible</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="modal-btn cancel-btn"
+            id="cancelUploadBtn"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="modal-btn upload-btn-modal"
+            id="confirmUploadBtn"
+            disabled
+          >
+            <i class="fas fa-upload"></i> Upload
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Google Picker API -->
+    <script
+      type="text/javascript"
+      src="https://apis.google.com/js/api.js"
+    ></script>
+
+    <script src="../config.js"></script>
     <script src="teachings.js"></script>
+    <script src="../dashboard/shared-script.js"></script>
   </body>
 </html>
-
-
-

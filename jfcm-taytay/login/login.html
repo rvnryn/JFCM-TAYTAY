@@ -29,12 +29,20 @@
           <h2>Login into account</h2>
 
           <label>Username or Email</label>
-          <input type="text" />
+          <input type="text" id="identifier" />
 
           <label>Password</label>
-          <input type="password" />
+          <input type="password" id="password" />
 
-          <a href="../dashboard/dashboard.html" class="login-btn">Login</a>
+          <button id="login-btn" class="login-btn">Login</button>
+          <div id="login-error" class="login-error"></div>
+          <div id="login-modal" class="modal">
+            <div class="modal-content" id="login-modal-content">
+              <span class="close" id="modal-close">&times;</span>
+              <div id="modal-icon"></div>
+              <div id="modal-message"></div>
+            </div>
+          </div>
 
           <p class="copyright">© 2026 JFCM TAYTAY. All rights reserved.</p>
         </div>
