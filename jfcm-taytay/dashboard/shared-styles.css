@@ -535,12 +535,14 @@ header {
   transform: translateY(-2px);
 }
 
-.modal-btn-confirm {
+.modal-btn-confirm,
+.modal-btn-danger {
   background-color: #dc3545;
   color: #fff;
 }
 
-.modal-btn-confirm:hover {
+.modal-btn-confirm:hover,
+.modal-btn-danger:hover {
   background-color: #c82333;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);

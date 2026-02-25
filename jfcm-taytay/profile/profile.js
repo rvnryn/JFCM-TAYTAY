@@ -49,14 +49,19 @@ async function fetchCurrentUser() {
 function updateProfileUI(user) {
   // Update profile picture - show saved image or initials
   const profilePictureDiv = document.getElementById('profilePicture');
-  if (user.profile_picture) {
-    // Load saved profile picture from backend
-    const imgUrl = `${API_BASE_URL}/auth/profile-picture/${user.profile_picture}?t=${Date.now()}`;
-    profilePictureDiv.innerHTML = `<img src="${imgUrl}" alt="Profile Picture" style="width:100%;height:100%;object-fit:cover;" />`;
+  if (user.profile_picture && user.profile_picture.startsWith('data:')) {
+    // profile_picture is stored as a base64 data URL — use it directly
+    profilePictureDiv.innerHTML = `<img src="${user.profile_picture}" alt="Profile Picture" style="width:100%;height:100%;object-fit:cover;" />`;
+    // Show the remove button when a picture exists
+    const removeBtn = document.getElementById('profileRemoveBtn');
+    if (removeBtn) removeBtn.style.display = '';
   } else {
     // Show initials if no profile picture
     const initials = getInitials(user.full_name);
     profilePictureDiv.innerHTML = `<span style="font-size: inherit; font-weight: 600;">${initials}</span>`;
+    // Hide remove button when no picture
+    const removeBtn = document.getElementById('profileRemoveBtn');
+    if (removeBtn) removeBtn.style.display = 'none';
   }
   
   // Update full name in multiple places
@@ -114,14 +119,37 @@ function updateSidebarUserInfo(user) {
   // Update sidebar avatar with profile picture or initials
   if (sidebarAvatar) {
     if (user.profile_picture) {
-      const imgUrl = `${API_BASE_URL}/auth/profile-picture/${user.profile_picture}?t=${Date.now()}`;
-      sidebarAvatar.innerHTML = `<img src="${imgUrl}" alt="Profile" style="width:100%;height:100%;object-fit:cover;">`;
+      sidebarAvatar.innerHTML = `<img src="${user.profile_picture}" alt="Profile" style="width:100%;height:100%;object-fit:cover;">`;
     } else {
       const initials = getInitials(user.full_name);
       sidebarAvatar.innerHTML = initials;
       sidebarAvatar.style.fontSize = '18px';
     }
   }
+}
+
+// Compress image client-side to keep DB payload small (~30-50 KB)
+function compressImage(file, maxSize = 300, quality = 0.85) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if (w > maxSize || h > maxSize) {
+          if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+          else       { w = Math.round(w * maxSize / h); h = maxSize; }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob(resolve, 'image/jpeg', quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 // Get initials from full name
@@ -149,12 +177,6 @@ if (profileUploadBtn) {
       showToast('Please select a valid image file', 'error');
       return;
     }
-    
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('Image size should not exceed 5MB', 'error');
-      return;
-    }
 
     const token = localStorage.getItem('access_token');
     if (!token) {
@@ -162,37 +184,40 @@ if (profileUploadBtn) {
       return;
     }
 
-    // Create FormData and upload to backend
-    const formData = new FormData();
-    formData.append('file', file);
-    
+    showToast('Uploading...', 'info');
+
     try {
+      // Compress to max 300×300 px, ~30-50 KB before sending
+      const compressed = await compressImage(file);
+
+      const formData = new FormData();
+      formData.append('file', compressed, 'profile.jpg');
+
       const response = await fetch(`${API_BASE_URL}/auth/profile-picture`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData
       });
 
       if (response.ok) {
-        const data = await response.json();
-        
-        // Update profile picture preview with saved image
-        profilePicture.style.opacity = '0';
-        setTimeout(() => {
-          const imgUrl = `${API_BASE_URL}/auth/profile-picture/${data.filename}?t=${Date.now()}`;
-          profilePicture.innerHTML = `<img src="${imgUrl}" alt="Profile Picture" style="width:100%;height:100%;object-fit:cover;" />`;
-          profilePicture.style.opacity = '1';
-          
-          // Also update sidebar avatar immediately
-          const sidebarAvatar = document.getElementById('sidebar-user-avatar');
-          if (sidebarAvatar) {
-            sidebarAvatar.innerHTML = `<img src="${imgUrl}" alt="Profile" style="width:100%;height:100%;object-fit:cover;">`;
-          }
-          
-          showToast('Profile picture updated successfully!', 'success');
-        }, 300);
+        // Read compressed blob as data URL for instant preview (no extra round-trip)
+        const reader = new FileReader();
+        reader.onload = (re) => {
+          const dataUrl = re.target.result;
+          profilePicture.style.opacity = '0';
+          setTimeout(() => {
+            profilePicture.innerHTML = `<img src="${dataUrl}" alt="Profile Picture" style="width:100%;height:100%;object-fit:cover;" />`;
+            profilePicture.style.opacity = '1';
+            const removeBtn = document.getElementById('profileRemoveBtn');
+            if (removeBtn) removeBtn.style.display = '';
+            const sidebarAvatar = document.getElementById('sidebar-user-avatar');
+            if (sidebarAvatar) {
+              sidebarAvatar.innerHTML = `<img src="${dataUrl}" alt="Profile" style="width:100%;height:100%;object-fit:cover;">`;
+            }
+            showToast('Profile picture updated successfully!', 'success');
+          }, 300);
+        };
+        reader.readAsDataURL(compressed);
       } else {
         const error = await response.json();
         showToast(error.detail || 'Failed to upload profile picture', 'error');
@@ -200,6 +225,61 @@ if (profileUploadBtn) {
     } catch (error) {
       console.error('Upload error:', error);
       showToast('Failed to upload profile picture', 'error');
+    }
+  });
+}
+
+// Remove profile picture — with confirmation modal
+const profileRemoveBtn = document.getElementById('profileRemoveBtn');
+const removePhotoModal = document.getElementById('removePhotoModal');
+const removePhotoCancelBtn = document.getElementById('removePhotoCancelBtn');
+const removePhotoConfirmBtn = document.getElementById('removePhotoConfirmBtn');
+
+if (profileRemoveBtn) {
+  profileRemoveBtn.addEventListener('click', () => {
+    if (removePhotoModal) removePhotoModal.classList.add('active');
+  });
+}
+
+if (removePhotoCancelBtn) {
+  removePhotoCancelBtn.addEventListener('click', () => {
+    removePhotoModal.classList.remove('active');
+  });
+}
+
+// Close modal on backdrop click
+if (removePhotoModal) {
+  removePhotoModal.addEventListener('click', (e) => {
+    if (e.target === removePhotoModal) removePhotoModal.classList.remove('active');
+  });
+}
+
+if (removePhotoConfirmBtn) {
+  removePhotoConfirmBtn.addEventListener('click', async () => {
+    removePhotoModal.classList.remove('active');
+    const token = localStorage.getItem('access_token');
+    if (!token) return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/profile-picture`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        profilePicture.innerHTML = `<i class="fas fa-user"></i>`;
+        if (profileRemoveBtn) profileRemoveBtn.style.display = 'none';
+        const sidebarAvatar = document.getElementById('sidebar-user-avatar');
+        if (sidebarAvatar) {
+          sidebarAvatar.innerHTML = localStorage.getItem('user_initials') || 'U';
+          sidebarAvatar.style.fontSize = '18px';
+        }
+        showToast('Profile picture removed', 'success');
+      } else {
+        const err = await response.json();
+        showToast(err.detail || 'Failed to remove profile picture', 'error');
+      }
+    } catch (err) {
+      console.error('Remove error:', err);
+      showToast('Failed to remove profile picture', 'error');
     }
   });
 }

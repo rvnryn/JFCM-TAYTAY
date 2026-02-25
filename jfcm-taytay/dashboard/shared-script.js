@@ -66,10 +66,9 @@ function updateSidebarUserInfo(user) {
   
   // Update avatar with profile picture or initials
   if (sidebarAvatar) {
-    if (user.profile_picture) {
-      // Show profile picture
-      const imgUrl = `${API_BASE_URL}/auth/profile-picture/${user.profile_picture}?t=${Date.now()}`;
-      sidebarAvatar.innerHTML = `<img src="${imgUrl}" alt="Profile" style="width:100%;height:100%;object-fit:cover;">`;
+    if (user.profile_picture && user.profile_picture.startsWith('data:')) {
+      // profile_picture is a base64 data URL — use it directly
+      sidebarAvatar.innerHTML = `<img src="${user.profile_picture}" alt="Profile" style="width:100%;height:100%;object-fit:cover;">`;
     } else {
       // Show initials
       const initials = getInitials(user.full_name);

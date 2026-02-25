@@ -39,11 +39,20 @@ document
     }
 
     try {
-      const response = await fetch(`${window.API_BASE_URL}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier, password }),
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000);
+
+      let response;
+      try {
+        response = await fetch(`${window.API_BASE_URL}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier, password }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
 
       if (response.ok) {
         const data = await response.json();
@@ -57,6 +66,10 @@ document
         showError(error.detail || "Login failed. Please check your credentials.");
       }
     } catch (err) {
-      showError("Could not connect to the server. Please try again.");
+      if (err.name === 'AbortError') {
+        showError("Server is starting up — this can take up to 30 seconds. Please try again.");
+      } else {
+        showError("Could not connect to the server. Please try again.");
+      }
     }
   });

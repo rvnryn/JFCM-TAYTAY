@@ -164,13 +164,16 @@
               accept="image/*"
               style="display: none"
             />
+            <button class="profile-remove-btn" id="profileRemoveBtn" style="display:none;">
+              <i class="fas fa-trash"></i>
+            </button>
           </div>
         </div>
 
         <!-- User Information Section -->
         <div class="profile-info-section">
           <div class="profile-name-section">
-            <p class="profile-full-name">Marie Rye Detera</p>
+            <p class="profile-full-name"></p>
           </div>
 
           <div class="profile-details-section">
@@ -179,7 +182,7 @@
                 <i class="fas fa-user"></i>
                 Username
               </h3>
-              <p class="profile-info-value" id="profile-username-value">marieryedetera</p>
+              <p class="profile-info-value" id="profile-username-value"></p>
             </div>
 
             <div class="profile-info-item">
@@ -187,7 +190,7 @@
                 <i class="fas fa-shield-alt"></i>
                 Role
               </h3>
-              <p class="profile-info-value" id="profile-role-value">Admin</p>
+              <p class="profile-info-value" id="profile-role-value"></p>
             </div>
 
             <div class="profile-info-item">
@@ -195,7 +198,7 @@
                 <i class="fas fa-envelope"></i>
                 Email
               </h3>
-              <p class="profile-info-value" id="profile-email-value">marie@jfcm.com</p>
+              <p class="profile-info-value" id="profile-email-value"></p>
             </div>
 
             <div class="profile-info-item">
@@ -203,12 +206,33 @@
                 <i class="fas fa-calendar-alt"></i>
                 Member Since
               </h3>
-              <p class="profile-info-value" id="profile-member-since-value">January 2025</p>
+              <p class="profile-info-value" id="profile-member-since-value"></p>
             </div>
           </div>
         </div>
       </div>
     </main>
+
+    <!-- Remove Photo Confirmation Modal -->
+    <div id="removePhotoModal" class="modal">
+      <div class="modal-content">
+        <h2 class="modal-title">
+          <i class="fas fa-trash"></i>
+          Remove Profile Picture
+        </h2>
+        <p class="modal-message">Are you sure you want to remove your profile picture?</p>
+        <div class="modal-actions">
+          <button class="modal-btn modal-btn-cancel" id="removePhotoCancelBtn">
+            <i class="fas fa-times"></i>
+            Cancel
+          </button>
+          <button class="modal-btn modal-btn-danger" id="removePhotoConfirmBtn">
+            <i class="fas fa-trash"></i>
+            Remove
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Logout Modal -->
     <div id="logoutModal" class="modal">
