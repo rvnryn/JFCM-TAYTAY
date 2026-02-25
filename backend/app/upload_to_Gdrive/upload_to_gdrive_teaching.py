@@ -48,7 +48,8 @@ async def get_current_user(
 CLIENT_SECRETS_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
     "GOOGLE_CREDENTIALS_PATH",
-    "/etc/secrets/credentials.json" 
+    "/etc/secrets/credentials.json",
+    "credentials.json" 
 )
 
 def load_client_config():
