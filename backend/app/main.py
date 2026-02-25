@@ -67,6 +67,10 @@ app.include_router(gdrive_router.router)
 app.include_router(gdrive_sow1_router.router)
 app.include_router(gdrive_sow2_router.router)
 
+@app.get("/")
+def root():
+    return {"message": "JFCM Taytay API is running"}
+
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
