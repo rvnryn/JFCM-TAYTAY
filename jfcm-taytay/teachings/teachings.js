@@ -848,8 +848,8 @@ function updateUploadButtonState() {
 
 // On modal open, reset selectedFolder
 function isUserAuthenticated() {
-  // Basic check: user_email in localStorage
-  return !!localStorage.getItem("user_email");
+  // User is app-authenticated if a JWT access token is present
+  return !!localStorage.getItem("access_token");
 }
 
 async function openUploadModal() {
@@ -1288,14 +1288,18 @@ async function loadTeachings() {
     }
 
     // Backend merges files from ALL connected Drive accounts — no folder_id needed
+    const _ctrl = new AbortController();
+    const _tid = setTimeout(() => _ctrl.abort(), 20000);
     const response = await fetch(
       `${window.API_BASE_URL}/gdrive/teaching/list-files`,
       {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
+        signal: _ctrl.signal,
       },
     );
+    clearTimeout(_tid);
 
     if (response.status === 503) {
       displayEmptyState('No teachings folder configured yet. An admin needs to upload a teaching first.');
@@ -1326,7 +1330,9 @@ async function loadTeachings() {
     applyFiltersAndDisplay();
   } catch (error) {
     console.error("Load teachings error:", error);
-    if (error.message.includes("authenticated")) {
+    if (error.name === 'AbortError') {
+      displayEmptyState('Server is starting up — this can take up to 30 seconds on first load. Please refresh the page to retry.');
+    } else if (error.message.includes("authenticated")) {
       displayEmptyState("Connecting to Google Drive...");
       await initiateGoogleAuth();
     } else {

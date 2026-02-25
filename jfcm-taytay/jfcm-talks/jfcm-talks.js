@@ -850,9 +850,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
       // Fetch only from YouTube endpoint
-      const youtubeResponse = await fetch(`${API_ENDPOINT}/videos?limit=50`).catch(err => {
-        return { ok: false };
+      const _ctrl = new AbortController();
+      const _tid = setTimeout(() => _ctrl.abort(), 20000);
+      const youtubeResponse = await fetch(`${API_ENDPOINT}/videos?limit=50`, {
+        signal: _ctrl.signal,
       });
+      clearTimeout(_tid);
       
       let allVideosList = [];
       
@@ -870,11 +873,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       displayBackendVideos(allVideosList);
     } catch (error) {
       console.error('Load videos error:', error);
-      showToast('Failed to load videos', 'error');
+      const msg = error.name === 'AbortError'
+        ? 'Server is starting up &mdash; this can take up to 30 seconds on first load.'
+        : 'Failed to load videos. Please try again.';
       contentList.innerHTML = `
         <div class="empty-state">
-          <i class="fas fa-exclamation-circle empty-icon"></i>
-          <p>Failed to load videos. Please try again.</p>
+          <i class="fas fa-satellite-dish empty-icon"></i>
+          <p>${msg}</p>
+          <button onclick="window.location.reload()" style="margin-top:12px;padding:8px 20px;background:#3a4d2c;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem;">&#8635; Retry</button>
         </div>
       `;
     }

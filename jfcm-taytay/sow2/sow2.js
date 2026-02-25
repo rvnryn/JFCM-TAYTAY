@@ -731,7 +731,8 @@ function updateUploadButtonState() {
 
 // Basic check: user_email in localStorage
 function isUserAuthenticated() {
-  return !!localStorage.getItem("gdrive_user_email_sow2");
+  // User is app-authenticated if a JWT access token is present
+  return !!localStorage.getItem("access_token");
 }
 
 function closeUploadModal() {
@@ -2025,11 +2026,15 @@ async function loadSow2Files() {
     }
 
     // Backend merges files from ALL connected Drive accounts — no folder_id needed
+    const _ctrl = new AbortController();
+    const _tid = setTimeout(() => _ctrl.abort(), 20000);
     const response = await fetch(`${window.API_BASE_URL}/gdrive/sow2/list-files`, {
       headers: {
         Authorization: `Bearer ${localStorage.getItem("access_token")}`,
       },
+      signal: _ctrl.signal,
     });
+    clearTimeout(_tid);
     if (response.status === 503) {
       const contentList = document.querySelector(".content-list");
       if (contentList) contentList.innerHTML = `<div class="empty-state"><i class="fas fa-inbox empty-icon"></i><p>No SOW2 folder configured yet. An admin needs to upload a file first.</p></div>`;
@@ -2059,6 +2064,11 @@ async function loadSow2Files() {
   } catch (error) {
     console.error("loadSow2Files: error", error);
     const contentList = document.querySelector(".content-list");
-    if (contentList) contentList.innerHTML = `<div class="empty-state"><i class="fas fa-inbox empty-icon"></i><p>Failed to load files. Please reconnect Google Drive.</p></div>`;
+    if (!contentList) return;
+    if (error.name === 'AbortError') {
+      contentList.innerHTML = `<div class="empty-state"><i class="fas fa-satellite-dish empty-icon"></i><p>Server is starting up &mdash; this can take up to 30 seconds on first load.</p><button onclick="loadSow2Files()" style="margin-top:12px;padding:8px 20px;background:#3a4d2c;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem;">&#8635; Retry</button></div>`;
+    } else {
+      contentList.innerHTML = `<div class="empty-state"><i class="fas fa-inbox empty-icon"></i><p>Failed to load files. Please reconnect Google Drive.</p></div>`;
+    }
   }
 }
