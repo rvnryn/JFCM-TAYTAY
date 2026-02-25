@@ -2012,7 +2012,18 @@ function showSkeletonGrid(count = 6) {
 
 async function loadSow2Files() {
   try {
-    showSkeletonGrid(6);
+    // Show cached data instantly, refresh in background (stale-while-revalidate)
+    const cached = localStorage.getItem('cache_sow2_files');
+    if (cached) {
+      try {
+        allSow2Files = JSON.parse(cached);
+        populateTopicFilter();
+        applyFiltersAndDisplay();
+      } catch(e) { showSkeletonGrid(6); }
+    } else {
+      showSkeletonGrid(6);
+    }
+
     // Backend merges files from ALL connected Drive accounts — no folder_id needed
     const response = await fetch(`${window.API_BASE_URL}/gdrive/sow2/list-files`, {
       headers: {
@@ -2041,6 +2052,8 @@ async function loadSow2Files() {
       }
       return file;
     });
+    // Cache for instant display on next load
+    try { localStorage.setItem('cache_sow2_files', JSON.stringify(allSow2Files)); } catch(e) {}
     populateTopicFilter();
     applyFiltersAndDisplay();
   } catch (error) {

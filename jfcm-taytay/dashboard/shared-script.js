@@ -21,13 +21,16 @@ function closeSidebar() {
 
 // Fetch and display current user info in sidebar
 async function fetchCurrentUserForSidebar() {
-  try {
-    const token = localStorage.getItem('access_token');
-    
-    if (!token) {
-      return; // Don't redirect, just don't update
-    }
+  const token = localStorage.getItem('access_token');
+  if (!token) return;
 
+  // Show cached user info immediately while API loads
+  const cached = localStorage.getItem('user_info');
+  if (cached) {
+    try { updateSidebarUserInfo(JSON.parse(cached)); } catch(e) {}
+  }
+
+  try {
     const response = await fetch(`${API_BASE_URL}/auth/me`, {
       method: 'GET',
       headers: {
@@ -38,6 +41,7 @@ async function fetchCurrentUserForSidebar() {
 
     if (response.ok) {
       const user = await response.json();
+      localStorage.setItem('user_info', JSON.stringify(user));
       updateSidebarUserInfo(user);
     }
   } catch (error) {
@@ -104,8 +108,9 @@ function closeLogoutModal() {
 
 // Confirm logout
 function confirmLogout() {
-  // Clear JWT token only — Google Drive credentials live in the DB and persist across logins
+  // Clear JWT token and cached user info
   localStorage.removeItem('access_token');
+  localStorage.removeItem('user_info');
   sessionStorage.removeItem('showAuthSuccess');
 
   // Redirect to login page
@@ -114,10 +119,17 @@ function confirmLogout() {
 
 // Load user info on page load and apply RBAC UI logic
 if (typeof API_BASE_URL !== 'undefined') {
-  document.addEventListener('DOMContentLoaded', () => {
+  // Scripts are at bottom of body so DOM is already ready — call directly.
+  // Fall back to DOMContentLoaded in case script is ever moved to <head>.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchCurrentUserForSidebar();
+      applyRoleBasedUI();
+    });
+  } else {
     fetchCurrentUserForSidebar();
     applyRoleBasedUI();
-  });
+  }
 
   // Debounce visibility/focus refresh to avoid hammering the /auth/me endpoint.
   // Minimum 30 seconds between automatic refreshes.

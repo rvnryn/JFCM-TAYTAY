@@ -836,7 +836,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Load videos from both YouTube and Internet Archive backends
   async function loadVideosFromBackend() {
-    showSkeletonGrid(6);
+    // Show cached data instantly, refresh in background (stale-while-revalidate)
+    const cached = localStorage.getItem('cache_jfcm_talks');
+    if (cached) {
+      try {
+        allVideos = JSON.parse(cached);
+        populateTopicFilterDropdown(allVideos);
+        displayBackendVideos(allVideos);
+      } catch(e) { showSkeletonGrid(6); }
+    } else {
+      showSkeletonGrid(6);
+    }
+
     try {
       // Fetch only from YouTube endpoint
       const youtubeResponse = await fetch(`${API_ENDPOINT}/videos?limit=50`).catch(err => {
@@ -853,8 +864,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
       allVideos = allVideosList;
-        populateTopicFilterDropdown(allVideosList);
-        displayBackendVideos(allVideosList);
+      // Cache for instant display on next load
+      try { localStorage.setItem('cache_jfcm_talks', JSON.stringify(allVideosList)); } catch(e) {}
+      populateTopicFilterDropdown(allVideosList);
+      displayBackendVideos(allVideosList);
     } catch (error) {
       console.error('Load videos error:', error);
       showToast('Failed to load videos', 'error');

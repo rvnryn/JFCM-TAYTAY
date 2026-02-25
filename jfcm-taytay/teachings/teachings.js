@@ -1275,7 +1275,18 @@ async function loadTeachings() {
       return;
     }
 
-    showSkeletonGrid(6);
+    // Show cached data instantly, refresh in background (stale-while-revalidate)
+    const cached = localStorage.getItem('cache_teachings_files');
+    if (cached) {
+      try {
+        allTeachings = JSON.parse(cached);
+        populateTopicFilter();
+        applyFiltersAndDisplay();
+      } catch(e) { showSkeletonGrid(6); }
+    } else {
+      showSkeletonGrid(6);
+    }
+
     // Backend merges files from ALL connected Drive accounts — no folder_id needed
     const response = await fetch(
       `${window.API_BASE_URL}/gdrive/teaching/list-files`,
@@ -1307,6 +1318,9 @@ async function loadTeachings() {
       const metadata = parseFileDescription(file.description);
       return { ...file, ...metadata };
     });
+
+    // Cache for instant display on next load
+    try { localStorage.setItem('cache_teachings_files', JSON.stringify(allTeachings)); } catch(e) {}
 
     populateTopicFilter();
     applyFiltersAndDisplay();
