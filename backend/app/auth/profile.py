@@ -75,7 +75,12 @@ async def upload_profile_picture(
     mime_type = MIME_TO_DATAURL.get(file.content_type or "", "image/jpeg")
     data_url = f"data:{mime_type};base64,{base64.b64encode(contents).decode()}"
 
-    current_user.profile_picture = data_url
+    # Re-fetch the user in THIS session so the change is tracked and committed correctly.
+    # (current_user belongs to a different injected session from get_current_user)
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    user.profile_picture = data_url
     db.commit()
 
     return {"message": "Profile picture updated successfully"}
@@ -87,6 +92,8 @@ async def remove_profile_picture(
     db: Session = Depends(get_db)
 ):
     """Remove the current user's profile picture."""
-    current_user.profile_picture = None
-    db.commit()
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if user:
+        user.profile_picture = None
+        db.commit()
     return {"message": "Profile picture removed successfully"}
