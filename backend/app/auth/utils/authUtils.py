@@ -1,6 +1,15 @@
 from passlib.context import CryptContext
 
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+# Argon2id with OWASP-minimum parameters (m=19 MiB, t=2, p=1).
+# Passlib's default is memory_cost=102400 (100 MiB) which is dangerously slow
+# on free-tier servers with 512 MB RAM and causes 2-5 s login times.
+pwd_context = CryptContext(
+    schemes=["argon2"],
+    deprecated="auto",
+    argon2__memory_cost=19456,   # 19 MiB  (OWASP min)
+    argon2__time_cost=2,
+    argon2__parallelism=1,
+)
 
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)

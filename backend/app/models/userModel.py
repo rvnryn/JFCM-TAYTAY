@@ -1,9 +1,10 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 from database.database import Base
 from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, Literal
+from datetime import datetime
 
 class User(Base):
     __tablename__ = "users"
@@ -15,7 +16,7 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     role = Column(String, default="user")
     is_active = Column(Boolean, default=True)
-    profile_picture: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    profile_picture: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
 #Base Modal
@@ -41,6 +42,7 @@ class UserOut(BaseModel):
     role : str
     is_active: bool
     profile_picture: Optional[str] = None
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

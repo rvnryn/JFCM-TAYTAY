@@ -1,9 +1,7 @@
+import base64
 import logging
-import uuid
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, status
-from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from database.deps import get_db
@@ -17,24 +15,29 @@ router = APIRouter(
     tags=["Profile"]
 )
 
-# Create upload directory
-UPLOAD_DIR = Path("uploads/profile_pictures").resolve()
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-# Allowed MIME types and their magic byte signatures
+# Allowed MIME types and their data-URL media types
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/jpg", "image/gif", "image/webp"}
+MIME_TO_DATAURL: dict[str, str] = {
+    "image/jpeg": "image/jpeg",
+    "image/jpg": "image/jpeg",
+    "image/png": "image/png",
+    "image/gif": "image/gif",
+    "image/webp": "image/webp",
+}
 MAGIC_BYTES: dict[bytes, str] = {
     b"\xff\xd8\xff": "image/jpeg",
     b"\x89PNG": "image/png",
     b"GIF8": "image/gif",
-    b"RIFF": "image/webp",  # webp starts with RIFF....WEBP
+    b"RIFF": "image/webp",
 }
-ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}
+
+# Client should compress to <500 KB before uploading
+MAX_UPLOAD_BYTES = 500 * 1024
 
 
 def _detect_image_type(data: bytes) -> bool:
     """Return True if file bytes match a known image magic signature."""
-    for magic, _ in MAGIC_BYTES.items():
+    for magic in MAGIC_BYTES:
         if data[:len(magic)] == magic:
             return True
     return False
@@ -46,85 +49,44 @@ async def upload_profile_picture(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Upload a profile picture for the current user."""
+    """Upload a profile picture. Stored as a base64 data URL in the DB so it
+    survives server restarts (no ephemeral filesystem dependency)."""
 
-    # Validate declared MIME type
     if file.content_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid file type. Only JPEG, PNG, GIF, and WEBP images are allowed."
         )
 
-    # Read file and enforce 5 MB limit
     contents = await file.read()
-    if len(contents) > 5 * 1024 * 1024:
+
+    if len(contents) > MAX_UPLOAD_BYTES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File too large. Maximum size is 5 MB."
+            detail="File too large. Maximum size is 500 KB (please compress the image first)."
         )
 
-    # Validate actual file bytes (magic bytes check)
     if not _detect_image_type(contents):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File content does not match a valid image format."
         )
 
-    # Sanitize extension — only allow known safe extensions
-    raw_ext = (file.filename or "").rsplit(".", 1)[-1].lower()
-    file_extension = raw_ext if raw_ext in ALLOWED_EXTENSIONS else "jpg"
+    mime_type = MIME_TO_DATAURL.get(file.content_type or "", "image/jpeg")
+    data_url = f"data:{mime_type};base64,{base64.b64encode(contents).decode()}"
 
-    # Delete old profile picture if it exists
-    if current_user.profile_picture:
-        old_file = UPLOAD_DIR / current_user.profile_picture
-        try:
-            old_resolved = old_file.resolve()
-            if str(old_resolved).startswith(str(UPLOAD_DIR)) and old_resolved.exists():
-                old_resolved.unlink()
-        except Exception as exc:
-            logger.warning("Could not delete old profile picture: %s", exc)
-
-    # Save new file with a random UUID name (no user-supplied filename in path)
-    filename = f"{current_user.id}_{uuid.uuid4()}.{file_extension}"
-    file_path = UPLOAD_DIR / filename
-
-    try:
-        file_path.write_bytes(contents)
-    except Exception as exc:
-        logger.error("Failed to save profile picture for user %s: %s", current_user.id, exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to save file."
-        )
-
-    current_user.profile_picture = filename
+    current_user.profile_picture = data_url
     db.commit()
-    db.refresh(current_user)
 
-    return {"message": "Profile picture updated successfully", "filename": filename}
+    return {"message": "Profile picture updated successfully"}
 
 
-@router.get("/profile-picture/{filename}")
-async def get_profile_picture(filename: str):
-    """Serve a profile picture file."""
-
-    # Resolve and guard against path traversal
-    try:
-        resolved = (UPLOAD_DIR / filename).resolve()
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filename.")
-
-    if not str(resolved).startswith(str(UPLOAD_DIR)):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filename.")
-
-    if not resolved.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Profile picture not found."
-        )
-
-    return FileResponse(
-        resolved,
-        media_type="image/jpeg",
-        headers={"Cache-Control": "public, max-age=3600"}
-    )
+@router.delete("/profile-picture")
+async def remove_profile_picture(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Remove the current user's profile picture."""
+    current_user.profile_picture = None
+    db.commit()
+    return {"message": "Profile picture removed successfully"}
