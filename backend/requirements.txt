@@ -9,6 +9,7 @@ SQLAlchemy==2.0.42
 asyncpg==0.30.0
 psycopg2-binary==2.9.11
 passlib==1.7.4
+argon2-cffi==25.1.0
 python-jose==3.5.0
 PyJWT==2.10.1
 slowapi==0.1.9
