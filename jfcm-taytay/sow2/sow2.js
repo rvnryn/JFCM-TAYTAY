@@ -68,6 +68,7 @@ window.addEventListener("message", (event) => {
     event.data.email
   ) {
     localStorage.setItem("gdrive_user_email_sow2", event.data.email);
+    localStorage.setItem("gdrive_user_email", event.data.email); // shared key so other sections recognize the same account
     sessionStorage.setItem("googleAuthCompletedSow2", "true");
     window.location.reload();
   }
@@ -75,6 +76,7 @@ window.addEventListener("message", (event) => {
 
 // Ensure modal and picker button event listeners are attached after DOM loads
 document.addEventListener("DOMContentLoaded", () => {
+  showSkeletonGrid(6);
   // Always render the info box at least once
   updateConnectedGoogleAccountUI();
   // Use id for reliable event binding
@@ -169,22 +171,17 @@ document.addEventListener("DOMContentLoaded", () => {
   initializeFilters();
   initializeSearch();
 
-  // On page load, load SOW 2 files if authenticated
-  (async () => {
-    const status = await fetchGoogleDriveAuthStatus();
-    if (status.authenticated) {
-      await loadSow2Files();
-    }
-  })();
+  // On page load, load SOW2 files — list-files uses admin credential so all logged-in users can view
+  loadSow2Files();
 });
 
 function getCurrentUserEmail() {
-  // Use gdrive_user_email_sow2 for Google Drive logic
-  return localStorage.getItem("gdrive_user_email_sow2") || "";
+  // Use section-specific key first, fall back to shared gdrive_user_email (set by Teachings auth)
+  return localStorage.getItem("gdrive_user_email_sow2") || localStorage.getItem("gdrive_user_email") || "";
 }
 
 
-let connectedGoogleEmail = null;
+let connectedGoogleEmail = getCurrentUserEmail() || null;
 let allConnectedGoogleAccounts = [];
 let allSow2Files = [];
 let currentFilter = {
@@ -213,7 +210,7 @@ function updateConnectedGoogleAccountUI() {
         <button class="btn btn-secondary" id="showAllGoogleAccountsBtn">
           View Accounts
         </button>
-        <button class="btn btn-primary" id="switchGoogleAccountBtn">
+        <button class="btn btn-primary admin-only" id="switchGoogleAccountBtn">
           Sign in with Different Account
         </button>
       </div>
@@ -240,11 +237,11 @@ function updateConnectedGoogleAccountUI() {
 
 document.body.addEventListener("click", function (e) {
   if (e.target && e.target.id === "switchGoogleAccountBtn") {
-    // Just clear localStorage and reload to force Google auth chooser
+    // Clear all stored email keys so the new account becomes the active one
     localStorage.removeItem("gdrive_user_email_sow2");
+    localStorage.removeItem("gdrive_user_email");
     sessionStorage.removeItem("googleAuthCompletedSow2");
-    showToast("Switching accounts...", "info");
-    setTimeout(() => window.location.reload(), 500);
+    initiateGoogleAuthInModal();
   }
   if (e.target && e.target.id === "showAllGoogleAccountsBtn") {
     showAllConnectedAccounts();
@@ -259,6 +256,7 @@ async function fetchGoogleDriveAuthStatus() {
       {
         headers: {
           "X-User-Email": userEmail,
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
       },
     );
@@ -284,6 +282,7 @@ async function fetchGoogleOAuthToken() {
       {
         headers: {
           "X-User-Email": userEmail,
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
       },
     );
@@ -357,16 +356,20 @@ if (pickerBtn) {
 
 async function logoutGoogleDriveAccount() {
   try {
-    const gdriveEmail = localStorage.getItem("gdrive_user_email_sow2") || "";
+    const gdriveEmail = getCurrentUserEmail();
     const response = await fetch(
       `${window.API_BASE_URL}/gdrive/sow2/auth/logout`,
       {
         method: "POST",
-        headers: { "X-User-Email": gdriveEmail },
+        headers: {
+          "X-User-Email": gdriveEmail,
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+        },
       },
     );
     if (response.ok) {
       localStorage.removeItem("gdrive_user_email_sow2");
+      localStorage.removeItem("gdrive_user_email");
       sessionStorage.removeItem("googleAuthCompletedSow2");
       window.location.reload();
     } else {
@@ -601,6 +604,11 @@ async function showAllConnectedAccounts() {
   try {
     const response = await fetch(
       `${window.API_BASE_URL}/gdrive/sow2/auth/users`,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+        },
+      }
     );
     if (!response.ok) throw new Error("Failed to fetch accounts");
     const data = await response.json();
@@ -661,7 +669,7 @@ async function showAllConnectedAccounts() {
       btn.addEventListener("click", async () => {
         if (!confirm(`Remove account ${btn.dataset.email}?`)) return;
         try {
-          const resp = await fetch(`${window.API_BASE_URL}/gdrive/sow2/auth/remove?email=${encodeURIComponent(btn.dataset.email)}`, { method: "POST" });
+          const resp = await fetch(`${window.API_BASE_URL}/gdrive/sow2/auth/remove`, { method: "POST", headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}`, "X-User-Email": btn.dataset.email } });
           if (resp.ok) {
             showToast("Account removed.", "success");
             closeModal();
@@ -804,6 +812,7 @@ async function uploadFromModal() {
       method: "POST",
       headers: {
         "X-User-Email": userEmail,
+        Authorization: `Bearer ${localStorage.getItem("access_token")}`,
       },
       body: formData,
     });
@@ -949,13 +958,12 @@ function applyFiltersAndDisplay() {
 
 function displaySow2Files(sow2Files) {
   const contentList = document.querySelector(".content-list");
-  const emptyState = contentList.querySelector('.empty-state');
+  // Always clear skeleton before rendering anything
+  contentList.querySelector('.skeleton-grid')?.remove();
   if (!sow2Files || sow2Files.length === 0) {
-    if (emptyState) emptyState.style.display = '';
-    contentList.querySelector('.sow2-grid-modern')?.remove();
+    contentList.innerHTML = `<div class="empty-state"><i class="fas fa-inbox empty-icon"></i><p>No SOW2 files uploaded yet.</p></div>`;
     return;
   }
-  if (emptyState) emptyState.style.display = 'none';
   // Inject enhanced card CSS if not already present
   if (!document.getElementById("sow2CardStyles")) {
     const style = document.createElement("style");
@@ -1063,6 +1071,21 @@ function displaySow2Files(sow2Files) {
         color: #3a4d2c;
         margin: 0;
       }
+      .card-gdrive-account {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.78rem;
+        color: #5f6d7e;
+        margin: 4px 0 0 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .card-gdrive-account i {
+        color: #4285f4;
+        flex-shrink: 0;
+      }
       .sow2-actions {
         padding: 12px 12px;
         border-top: 1px solid #f1f5f9;
@@ -1132,6 +1155,7 @@ function createSow2FileCard(file) {
   }
   const displayTitle = (parsed.title && parsed.title.trim()) || file.title || "";
   let displayTopic = (parsed.topic && parsed.topic.trim()) || file.topic || "";
+  const gdriveAccount = file._uploaded_by || "";
 
   return `
     <div class="sow2-card sow2-card-modern" data-file-id="${file.id}" data-file-url="${file.webViewLink || file.webContentLink || ''}">
@@ -1148,6 +1172,7 @@ function createSow2FileCard(file) {
         </div>
         <p class="sow2-description">${fileType} document</p>
         <p class="sow2-topic"><strong>Topic:</strong> ${escapeHtml(displayTopic)}</p>
+        ${gdriveAccount ? `<p class="card-gdrive-account"><i class="fab fa-google-drive"></i> ${escapeHtml(gdriveAccount)}</p>` : ""}
       </div>
       <div class="sow2-actions">
         <button class="action-btn view" data-action="view">
@@ -1182,6 +1207,11 @@ async function openUploadModal() {
   // Reset form
   clearSelectedFile();
   document.getElementById("sow2Title").value = "";
+  const _sow2TopicEl = document.getElementById("sow2Topic");
+  if (_sow2TopicEl) _sow2TopicEl.value = "";
+  initTopicSuggestions("sow2Topic", () =>
+    allSow2Files.map((f) => f.topic || f.category || "").filter(Boolean)
+  );
   // Check Google Drive authentication and show appropriate section
   await checkAndShowGdriveSection();
   // Show success toast if just authenticated
@@ -1195,8 +1225,12 @@ function attachCardEventListeners() {
   const cards = document.querySelectorAll(".sow2-card");
   cards.forEach((card) => {
     card.addEventListener("click", (e) => {
-      if (e.target.dataset.action === "view") {
+      const btn = e.target.closest("[data-action]");
+      if (!btn) return;
+      if (btn.dataset.action === "view") {
         window.open(card.dataset.fileUrl, "_blank");
+      } else if (btn.dataset.action === "delete") {
+        deleteSow2File(card.dataset.fileId);
       }
     });
   });
@@ -1211,20 +1245,102 @@ function displayEmptyState(message = "No SOW 2 files available") {
 // DELETE FUNCTIONALITY
 // ===================================
 
+function showCustomConfirm(title, message, onConfirm, onCancel = null) {
+  const modalHTML = `
+    <div class="custom-confirm-overlay" id="customConfirmModal">
+      <div class="custom-confirm-modal">
+        <div class="confirm-header">
+          <h3>${escapeHtml(title)}</h3>
+        </div>
+        <div class="confirm-body">
+          <p>${escapeHtml(message)}</p>
+        </div>
+        <div class="confirm-footer">
+          <button class="confirm-btn cancel" id="confirmCancelBtn">Cancel</button>
+          <button class="confirm-btn confirm" id="confirmOkBtn">Confirm</button>
+        </div>
+      </div>
+    </div>
+  `;
+  if (!document.getElementById("customConfirmStyles")) {
+    const style = document.createElement("style");
+    style.id = "customConfirmStyles";
+    style.innerHTML = `
+      .custom-confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:100000;animation:fadeIn .2s ease}
+      .custom-confirm-modal{background:#fff;border-radius:16px;width:90%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3);animation:slideUp .3s ease}
+      .confirm-header{padding:24px 24px 16px;border-bottom:1px solid #e2e8f0}
+      .confirm-header h3{margin:0;font-size:1.25rem;font-weight:600;color:#1e293b}
+      .confirm-body{padding:20px 24px}
+      .confirm-body p{margin:0;font-size:.95rem;color:#64748b;line-height:1.6}
+      .confirm-footer{padding:16px 24px;display:flex;gap:12px;justify-content:flex-end;border-top:1px solid #e2e8f0}
+      .confirm-btn{padding:10px 24px;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;transition:all .2s ease}
+      .confirm-btn.cancel{background:#f1f5f9;color:#475569}
+      .confirm-btn.cancel:hover{background:#e2e8f0}
+      .confirm-btn.confirm{background:#dc2626;color:#fff}
+      .confirm-btn.confirm:hover{background:#b91c1c}
+      @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+      @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+    `;
+    document.head.appendChild(style);
+  }
+  document.body.insertAdjacentHTML("beforeend", modalHTML);
+  const modal = document.getElementById("customConfirmModal");
+  const okBtn = document.getElementById("confirmOkBtn");
+  const cancelBtn = document.getElementById("confirmCancelBtn");
+  const closeModal = () => modal.remove();
+  okBtn.onclick = () => { closeModal(); if (onConfirm) onConfirm(); };
+  cancelBtn.onclick = () => { closeModal(); if (onCancel) onCancel(); };
+  modal.onclick = (e) => { if (e.target === modal) { closeModal(); if (onCancel) onCancel(); } };
+}
+
 async function deleteSow2File(fileId) {
+  const userEmail = getCurrentUserEmail();
+
+  // Check if the file belongs to a different Google Drive account
+  const fileObj = allSow2Files.find(f => f.id === fileId);
+  const fileOwner = fileObj?._uploaded_by || "";
+  if (fileOwner && userEmail && fileOwner !== userEmail) {
+    showToast(
+      `This file belongs to ${fileOwner}. Switch to that Google Drive account to delete it.`,
+      "warning"
+    );
+    return;
+  }
+
   showCustomConfirm(
     "Delete SOW 2 file?",
     "Are you sure you want to delete this SOW 2 file? This action cannot be undone.",
     async () => {
-      const response = await fetch(
-        `${window.API_BASE_URL}/gdrive/sow2/files/${fileId}`,
-        {
-          method: "DELETE",
-        },
-      );
-      if (response.ok) {
-        allSow2Files = allSow2Files.filter((file) => file.id !== fileId);
-        displaySow2Files(allSow2Files);
+      try {
+        const response = await fetch(
+          `${window.API_BASE_URL}/gdrive/sow2/delete-file/${fileId}`,
+          {
+            method: "DELETE",
+            headers: {
+              "X-User-Email": userEmail,
+              Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+            },
+          },
+        );
+        if (response.ok) {
+          allSow2Files = allSow2Files.filter((file) => file.id !== fileId);
+          populateTopicFilter();
+          applyFiltersAndDisplay();
+          showToast("SOW 2 file deleted successfully!", "success");
+        } else {
+          const err = await response.json().catch(() => ({}));
+          const detail = err.detail || "";
+          if (response.status === 401 || detail.toLowerCase().includes("not connected") || detail.toLowerCase().includes("insufficientfilepermissions")) {
+            showToast(
+              `Cannot delete: this file belongs to a different Google Drive account${fileOwner ? " (" + fileOwner + ")" : ""}. Switch to that account to delete it.`,
+              "warning"
+            );
+          } else {
+            showToast(detail || "Failed to delete file.", "error");
+          }
+        }
+      } catch (e) {
+        showToast("Delete error. Please try again.", "error");
       }
     },
   );
@@ -1252,6 +1368,46 @@ function initializeFilters() {
     // Also, set the dropdown to currentFilter.sort on load
     sortFilter.value = currentFilter.sort;
   }
+}
+
+function initTopicSuggestions(inputId, getTopicsFn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const oldBox = document.getElementById(inputId + "-suggestions");
+  if (oldBox) oldBox.remove();
+  const wrap = input.parentElement;
+  wrap.style.position = "relative";
+  const box = document.createElement("div");
+  box.id = inputId + "-suggestions";
+  box.style.cssText =
+    "position:absolute;z-index:9999;background:#fff;border:1px solid #d1d5db;" +
+    "border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:180px;" +
+    "overflow-y:auto;width:100%;display:none;top:calc(100% + 2px);left:0;";
+  wrap.appendChild(box);
+  function render(query) {
+    const topics = [...new Set(getTopicsFn().filter(Boolean))].sort();
+    const q = query.trim().toLowerCase();
+    const matches = q ? topics.filter((t) => t.toLowerCase().includes(q)) : topics;
+    if (!matches.length) { box.style.display = "none"; return; }
+    box.innerHTML = matches
+      .map(
+        (t) =>
+          `<div class="topic-suggestion-item" data-value="${t.replace(/"/g, "&quot;")}"
+            style="padding:9px 14px;cursor:pointer;font-size:14px;color:#333;border-bottom:1px solid #f3f4f6;"
+            onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background=''">${t}</div>`,
+      )
+      .join("");
+    box.style.display = "block";
+  }
+  input.addEventListener("input", () => render(input.value));
+  input.addEventListener("focus", () => render(input.value));
+  box.addEventListener("mousedown", (e) => {
+    const item = e.target.closest(".topic-suggestion-item");
+    if (item) { input.value = item.dataset.value; box.style.display = "none"; }
+  });
+  document.addEventListener("click", (e) => {
+    if (!wrap.contains(e.target)) box.style.display = "none";
+  }, { capture: true });
 }
 
 function populateTopicFilter() {
@@ -1749,6 +1905,11 @@ function setSow2FolderId(id) {
   if (id) {
     localStorage.setItem("sow2_folder_id", id);
     console.log('[DEBUG] setSow2FolderId: saved', id, 'to localStorage');
+    // Also persist to server so all users (including user-role) can access
+    fetch(`${window.API_BASE_URL}/gdrive/sow2/config?folder_id=${encodeURIComponent(id)}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` }
+    }).catch(() => {});
   }
 }
 
@@ -1785,18 +1946,84 @@ function parseTitleAndTopicFromDescription(description) {
   return { title, topic };
 }
 
+function showSkeletonGrid(count = 6) {
+  const contentList = document.querySelector(".content-list");
+  if (!contentList) return;
+  if (!document.getElementById("skeletonStyles")) {
+    const style = document.createElement("style");
+    style.id = "skeletonStyles";
+    style.textContent = `
+      @keyframes shimmer {
+        0%   { background-position: -600px 0; }
+        100% { background-position:  600px 0; }
+      }
+      .skeleton-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+        width: 100%;
+      }
+      .skeleton-card {
+        background: #fff;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+      }
+      .skeleton-preview {
+        width: 100%;
+        height: 180px;
+        background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+        background-size: 600px 100%;
+        animation: shimmer 1.4s infinite linear;
+      }
+      .skeleton-body {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .skeleton-line {
+        border-radius: 6px;
+        background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+        background-size: 600px 100%;
+        animation: shimmer 1.4s infinite linear;
+      }
+      .skeleton-title-line        { height: 14px; width: 90%; }
+      .skeleton-title-line.short  { width: 60%; }
+      .skeleton-meta-line         { height: 12px; width: 50%; margin-top: 4px; }
+      .skeleton-action-line       { height: 32px; width: 100%; border-radius: 8px; margin-top: 6px; }
+    `;
+    document.head.appendChild(style);
+  }
+  const cards = Array.from({ length: count }, () => `
+    <div class="skeleton-card">
+      <div class="skeleton-preview"></div>
+      <div class="skeleton-body">
+        <div class="skeleton-line skeleton-title-line"></div>
+        <div class="skeleton-line skeleton-title-line short"></div>
+        <div class="skeleton-line skeleton-meta-line"></div>
+        <div class="skeleton-line skeleton-action-line"></div>
+      </div>
+    </div>
+  `).join("");
+  contentList.innerHTML = `<div class="skeleton-grid">${cards}</div>`;
+}
+
 async function loadSow2Files() {
   try {
-    let folderId = getSow2FolderId();
-    let url = `${window.API_BASE_URL}/gdrive/sow2/list-files`;
-    if (folderId) {
-      url += `?folder_id=${encodeURIComponent(folderId)}`;
-    }
-    const response = await fetch(url, {
+    showSkeletonGrid(6);
+    // Backend merges files from ALL connected Drive accounts — no folder_id needed
+    const response = await fetch(`${window.API_BASE_URL}/gdrive/sow2/list-files`, {
       headers: {
-        "X-User-Email": getCurrentUserEmail(),
+        Authorization: `Bearer ${localStorage.getItem("access_token")}`,
       },
     });
+    if (response.status === 503) {
+      const contentList = document.querySelector(".content-list");
+      if (contentList) contentList.innerHTML = `<div class="empty-state"><i class="fas fa-inbox empty-icon"></i><p>No SOW2 folder configured yet. An admin needs to upload a file first.</p></div>`;
+      return;
+    }
     if (!response.ok) {
       throw new Error("Network response was not ok");
     }
@@ -1806,7 +2033,6 @@ async function loadSow2Files() {
       if (file.description) {
         const parsed = parseTitleAndTopicFromDescription(file.description);
         if (parsed.title) file.title = parsed.title;
-        // Only set topic if parsed.topic exists
         if (parsed.topic) {
           file.topic = parsed.topic;
         } else {
@@ -1819,5 +2045,7 @@ async function loadSow2Files() {
     applyFiltersAndDisplay();
   } catch (error) {
     console.error("loadSow2Files: error", error);
+    const contentList = document.querySelector(".content-list");
+    if (contentList) contentList.innerHTML = `<div class="empty-state"><i class="fas fa-inbox empty-icon"></i><p>Failed to load files. Please reconnect Google Drive.</p></div>`;
   }
 }

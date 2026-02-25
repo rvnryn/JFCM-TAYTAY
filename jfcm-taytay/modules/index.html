@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="robots" content="noindex, nofollow" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>JFCM Taytay - Modules</title>
 
@@ -20,6 +21,7 @@
     <link rel="stylesheet" href="modules.css" />
   </head>
   <body>
+    <script>if(!localStorage.getItem('access_token')){window.location.replace('../login/login.html');}</script>
     <header>
       <!--Navigation Bar-->
       <nav class="navbar">
@@ -135,6 +137,8 @@
         </div>
       </div>
     </header>
+
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <main class="dashboard-main">
       <h1 class="dashboard-title">School of Workers Modules</h1>

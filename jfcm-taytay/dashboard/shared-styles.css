@@ -1,6 +1,6 @@
 /* RBAC: Hide admin-only by default, show for admin */
 .admin-only { display: none !important; }
-body.admin .admin-only { display: initial !important; }
+body.admin .admin-only { display: flex !important; }
 * {
   margin: 0;
   padding: 0;
@@ -218,6 +218,27 @@ header {
   margin-left: 250px;
 }
 
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #4A5E42;
+  text-decoration: none;
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  padding: 6px 14px 6px 10px;
+  border-radius: 8px;
+  background: rgba(74, 94, 66, 0.08);
+  transition: background 0.2s, color 0.2s;
+}
+
+.back-btn:hover {
+  background: rgba(74, 94, 66, 0.16);
+  color: #303D2A;
+}
+
 .dashboard-title {
   font-family: 'Poppins', sans-serif;
   font-size: 32px;
@@ -235,10 +256,12 @@ header {
 .card-link {
   text-decoration: none;
   color: inherit;
+  width: 100%;
 }
 
 .card {
   background-color: #4A5E42;
+  width: 100%;
   padding: 25px;
   border-radius: 12px;
   text-align: center;
@@ -282,6 +305,16 @@ header {
 
   .cards-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Lone last card spans both columns at full width */
+  .cards-grid > .card-link:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .cards-grid > .card-link:last-child:nth-child(odd) .card {
+    width: 100%;
   }
 }
 
@@ -721,4 +754,99 @@ header {
 
 main {
   margin-top: 80px;
+}
+
+/* Sidebar overlay (mobile dark backdrop) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 998;
+  cursor: pointer;
+}
+
+/* ===========================
+   SHARED RESPONSIVE STYLES
+   =========================== */
+
+@media (max-width: 600px) {
+  .navbar {
+    padding: 0 16px;
+    height: 64px;
+  }
+
+  main {
+    margin-top: 64px;
+  }
+
+  header {
+    /* keep header fixed at new height */
+  }
+
+  .sidebar {
+    top: 64px;
+    height: calc(100vh - 64px);
+    width: 100%;
+    padding: 16px;
+  }
+
+  .dashboard-main {
+    padding: 20px 14px;
+  }
+
+  .dashboard-main.sidebar-open {
+    margin-left: 0;
+  }
+
+  .dashboard-title {
+    font-size: 24px;
+    margin-bottom: 20px;
+  }
+
+  .search-bar {
+    font-size: 14px;
+    padding: 10px 36px 10px 12px;
+  }
+
+  .controls-container {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .filters {
+    flex-direction: column;
+    min-width: unset;
+    gap: 10px;
+  }
+
+  .filter-group {
+    gap: 8px;
+  }
+
+  .filter-label {
+    min-width: 50px;
+    font-size: 13px;
+  }
+
+  .upload-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .content-list {
+    padding: 12px;
+  }
+
+  /* Overlay when sidebar open on mobile */
+  .sidebar-overlay.active {
+    display: block;
+  }
+}
+
+@media (max-width: 900px) {
+  .sidebar.active ~ .dashboard-main {
+    margin-left: 0;
+  }
 }

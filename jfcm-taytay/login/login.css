@@ -92,16 +92,28 @@ html, body {
 /* FORM ELEMENTS */
 .login-right label {
   display: block;
-  margin-bottom: 5px;
-  font-size: 14px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #444;
 }
 
 .login-right input {
   width: 100%;
-  padding: 12px;
+  padding: 12px 14px;
   margin-bottom: 20px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
+  border-radius: 8px;
+  border: 1.5px solid #ddd;
+  font-size: 14px;
+  font-family: 'Poppins', sans-serif;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+}
+
+.login-right input:focus {
+  border-color: #4A5E42;
+  box-shadow: 0 0 0 3px rgba(74, 94, 66, 0.12);
 }
 
 /* .login-right button {
@@ -124,13 +136,26 @@ html, body {
   display: block;
   width: 100%;
   padding: 14px;
+  border: none;
   border-radius: 25px;
   background: #4A5E42;
   color: white;
   text-align: center;
   text-decoration: none;
   font-size: 16px;
-  font-family: 'Poppins', sans-serif;   
+  font-family: 'Poppins', sans-serif;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 4px 14px rgba(74, 94, 66, 0.3);
+}
+
+.login-btn:hover {
+  background: #3a4d33;
+  box-shadow: 0 6px 18px rgba(74, 94, 66, 0.4);
+}
+
+.login-btn:active {
+  transform: scale(0.98);
 }
 
 .copyright {
@@ -259,4 +284,107 @@ html, body {
   content: "";
 }
 
+/* ===========================
+   RESPONSIVE STYLES
+   =========================== */
 
+/* Tablet */
+@media (max-width: 1050px) {
+  .login-card {
+    width: 88%;
+    min-height: unset;
+  }
+
+  .login-left img {
+    width: 180px;
+    height: 160px;
+  }
+
+  .login-right {
+    padding: 40px 36px;
+    padding-top: 60px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  html, body {
+    height: 100%;
+  }
+
+  .login-page {
+    height: 100%;
+    min-height: 100vh;
+    overflow-y: auto;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 0;
+    box-sizing: border-box;
+  }
+
+  .login-card {
+    flex-direction: column;
+    width: 90%;
+    max-width: 420px;
+    min-height: unset;
+    border-radius: 16px;
+    margin: auto;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  }
+
+  .login-left {
+    width: 100%;
+    padding: 28px 20px 22px;
+    box-sizing: border-box;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .login-left img {
+    width: 110px;
+    height: 98px;
+    margin-bottom: 0;
+  }
+
+  .login-right {
+    width: 100%;
+    padding: 28px 24px 32px;
+    box-sizing: border-box;
+  }
+
+  .back-link {
+    margin-top: 0;
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .login-right h2 {
+    font-size: 22px;
+    margin-bottom: 22px;
+  }
+
+  .login-right label {
+    font-size: 13px;
+  }
+
+  .login-right input {
+    padding: 11px 13px;
+    margin-bottom: 16px;
+    font-size: 15px;
+  }
+
+  .login-btn {
+    font-size: 15px;
+    padding: 13px;
+  }
+
+  .copyright {
+    margin-top: 28px;
+  }
+
+  .modal-content {
+    min-width: unset;
+    width: 88vw;
+    max-width: 360px;
+    padding: 28px 20px 22px;
+  }
+}

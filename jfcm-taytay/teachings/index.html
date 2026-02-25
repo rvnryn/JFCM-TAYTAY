@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="robots" content="noindex, nofollow" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>JFCM Taytay - Teachings</title>
 
@@ -20,6 +21,7 @@
     <link rel="stylesheet" href="teachings.css" />
   </head>
   <body>
+    <script>if(!localStorage.getItem('access_token')){window.location.replace('../login/login.html');}</script>
     <header>
       <!--Navigation Bar-->
       <nav class="navbar">
@@ -137,6 +139,8 @@
       </div>
     </header>
 
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
     <main class="dashboard-main">
       <h1 class="dashboard-title">Teachings</h1>
 
@@ -176,12 +180,7 @@
         </div>
       </div>
 
-      <div class="content-list">
-        <div class="empty-state">
-          <i class="fas fa-inbox empty-icon"></i>
-          <p>No teachings available</p>
-        </div>
-      </div>
+      <div class="content-list"></div>
     </main>
 
     <!-- Upload Modal -->

@@ -467,3 +467,136 @@
 /* SOW2 page CSS (based on teachings.css, all selectors updated to sow2) */
 /* Example: #sow2UploadModal, .sow2-table, etc. */
 /* ...full CSS here, see teachings.css for reference... */
+
+/* ===========================
+   RESPONSIVE STYLES
+   =========================== */
+
+/* Tablet (≤900px) */
+@media (max-width: 900px) {
+	.gdrive-account-card {
+		flex-wrap: wrap;
+		gap: 12px;
+	}
+
+	.gdrive-actions {
+		flex-wrap: wrap;
+		width: 100%;
+	}
+
+	.gdrive-actions .btn {
+		flex: 1;
+		text-align: center;
+		justify-content: center;
+	}
+
+	.sow2-grid,
+	.content-grid {
+		grid-template-columns: repeat(2, 1fr) !important;
+	}
+}
+
+/* Mobile (≤600px) */
+@media (max-width: 600px) {
+	.dashboard-title {
+		font-size: 22px !important;
+		margin-bottom: 16px !important;
+	}
+
+	.content-section {
+		margin-bottom: 16px;
+	}
+
+	/* GDrive card stacks vertically */
+	.gdrive-account-card {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 12px;
+		padding: 14px 16px;
+	}
+
+	.gdrive-account-card.empty {
+		align-items: center;
+	}
+
+	.gdrive-actions {
+		width: 100%;
+		flex-direction: column;
+	}
+
+	.gdrive-actions .btn {
+		width: 100%;
+		text-align: center;
+		justify-content: center;
+	}
+
+	.account-email {
+		font-size: 14px;
+		word-break: break-all;
+	}
+
+	/* Controls row stacks */
+	.controls-container {
+		flex-direction: column;
+		gap: 12px;
+		align-items: stretch;
+	}
+
+	.filters {
+		flex-direction: column;
+		min-width: unset;
+		gap: 10px;
+	}
+
+	.filter-group {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.upload-btn {
+		width: 100%;
+		justify-content: center;
+	}
+
+	/* Content list */
+	.content-list {
+		padding: 12px;
+	}
+
+	/* SOW2 cards single column */
+	.sow2-grid,
+	.content-grid,
+	.teaching-grid-modern {
+		grid-template-columns: 1fr !important;
+		gap: 14px !important;
+	}
+
+	/* Picker & folder buttons full width */
+	.picker-green-btn,
+	.folder-purple-btn {
+		width: 100%;
+		justify-content: center;
+		font-size: 14px;
+		padding: 12px 16px;
+	}
+
+	/* Modal slides up from bottom */
+	.modal-content {
+		width: 100%;
+		max-width: 100%;
+		border-radius: 12px 12px 0 0;
+		position: fixed;
+		bottom: 0;
+		margin: 0;
+		max-height: 92vh;
+	}
+
+	.modal,
+	.sow2-modal {
+		align-items: flex-end !important;
+	}
+
+	#uploadModal {
+		align-items: flex-end !important;
+	}
+}

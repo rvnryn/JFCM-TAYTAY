@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="robots" content="noindex, nofollow" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>JFCM Taytay - SOW 1</title>
 
@@ -20,6 +21,7 @@
     <link rel="stylesheet" href="sow1.css" />
   </head>
   <body>
+    <script>if(!localStorage.getItem('access_token')){window.location.replace('../login/login.html');}</script>
     <header>
       <!--Navigation Bar-->
       <nav class="navbar">
@@ -139,7 +141,12 @@
       </div>
     </header>
 
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
     <main class="dashboard-main">
+      <a href="../modules/index.html" class="back-btn">
+        <i class="fas fa-arrow-left"></i> Back to Modules
+      </a>
       <h1 class="dashboard-title">SOW 1</h1>
 
       <div id="connectedGoogleAccountInfo" class="gdrive-account-info"></div>
@@ -185,12 +192,7 @@
         </div>
       </div>
 
-      <div class="content-list">
-        <div class="empty-state">
-          <i class="fas fa-inbox empty-icon"></i>
-          <p>No SOW 1 modules available</p>
-        </div>
-      </div>
+      <div class="content-list"></div>
     </main>
 
     <!-- Upload Modal -->

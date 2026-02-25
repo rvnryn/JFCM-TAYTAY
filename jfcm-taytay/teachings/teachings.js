@@ -13,6 +13,9 @@ window.addEventListener("message", (event) => {
 
 // Ensure modal and picker button event listeners are attached after DOM loads
 document.addEventListener("DOMContentLoaded", () => {
+  showSkeletonGrid(6);
+  // Always render the account info box immediately using cached localStorage value
+  updateConnectedGoogleAccountUI();
   // Use id for reliable event binding
   const uploadBtn = document.getElementById("uploadBtn");
   const uploadModal = document.getElementById("uploadModal");
@@ -106,13 +109,8 @@ document.addEventListener("DOMContentLoaded", () => {
   initializeFilters();
   initializeSearch();
 
-  // On page load, load teachings if authenticated
-  (async () => {
-    const status = await fetchGoogleDriveAuthStatus();
-    if (status.authenticated) {
-      await loadTeachings();
-    }
-  })();
+  // On page load, load teachings — list-files uses admin credential so all logged-in users can view
+  loadTeachings();
 });
 
 function getCurrentUserEmail() {
@@ -122,7 +120,7 @@ function getCurrentUserEmail() {
 
 /* Teachings page JavaScript */
 
-let connectedGoogleEmail = null;
+let connectedGoogleEmail = getCurrentUserEmail() || null;
 let allConnectedGoogleAccounts = [];
 
 function updateConnectedGoogleAccountUI() {
@@ -140,7 +138,7 @@ function updateConnectedGoogleAccountUI() {
         <button class="btn btn-secondary" id="showAllGoogleAccountsBtn">
           View Accounts
         </button>
-        <button class="btn btn-primary" id="switchGoogleAccountBtn">
+        <button class="btn btn-primary admin-only" id="switchGoogleAccountBtn">
           Sign in with Different Account
         </button>
       </div>
@@ -167,11 +165,10 @@ function updateConnectedGoogleAccountUI() {
 
 document.body.addEventListener("click", function (e) {
   if (e.target && e.target.id === "switchGoogleAccountBtn") {
-    // Just clear localStorage and reload to force Google auth chooser
+    // Clear stored email and immediately open the OAuth account chooser
     localStorage.removeItem("gdrive_user_email");
     sessionStorage.removeItem("googleAuthCompleted");
-    showToast("Switching accounts...", "info");
-    setTimeout(() => window.location.reload(), 500);
+    initiateGoogleAuthInModal();
   }
   if (e.target && e.target.id === "showAllGoogleAccountsBtn") {
     showAllConnectedAccounts();
@@ -186,6 +183,7 @@ async function fetchGoogleDriveAuthStatus() {
       {
         headers: {
           "X-User-Email": userEmail,
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
       },
     );
@@ -207,6 +205,7 @@ async function fetchGoogleOAuthToken() {
       {
         headers: {
           "X-User-Email": userEmail,
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
       },
     );
@@ -275,7 +274,10 @@ async function logoutGoogleDriveAccount() {
       `${window.API_BASE_URL}/gdrive/teaching/auth/logout`,
       {
         method: "POST",
-        headers: { "X-User-Email": gdriveEmail },
+        headers: {
+          "X-User-Email": gdriveEmail,
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+        },
       },
     );
     if (response.ok) {
@@ -483,6 +485,11 @@ async function showAllConnectedAccounts() {
   try {
     const response = await fetch(
       `${window.API_BASE_URL}/gdrive/teaching/auth/users`,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+        },
+      }
     );
     if (!response.ok) {
       showToast("Failed to fetch accounts.", "error");
@@ -628,6 +635,7 @@ async function showAllConnectedAccounts() {
               headers: {
                 "Content-Type": "application/json",
                 "X-User-Email": email,
+                Authorization: `Bearer ${localStorage.getItem("access_token")}`,
               },
             },
           );
@@ -863,6 +871,10 @@ async function openUploadModal() {
   // Reset form
   clearSelectedFile();
   document.getElementById("teachingTitle").value = "";
+  document.getElementById("teachingTopic").value = "";
+  initTopicSuggestions("teachingTopic", () =>
+    allTeachings.map((t) => t.topic || t.category || "").filter(Boolean)
+  );
   // Check Google Drive authentication and show appropriate section
   await checkAndShowGdriveSection();
   // Show success toast if just authenticated
@@ -1032,6 +1044,7 @@ async function uploadFromModal() {
         method: "POST",
         headers: {
           "X-User-Email": userEmail,
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
         body: formData,
       },
@@ -1044,9 +1057,13 @@ async function uploadFromModal() {
 
     const result = await response.json();
 
-    // Save last used folder
+    // Save last used folder — both localStorage and server-side so all users see it
     localStorage.setItem("teachingsFolderId", folderId);
     selectedFolderId = folderId;
+    fetch(`${window.API_BASE_URL}/gdrive/teaching/config?folder_id=${encodeURIComponent(folderId)}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` }
+    }).catch(() => {});
 
     showToast(`Teaching "${result.title}" uploaded successfully!`, "success");
 
@@ -1079,6 +1096,7 @@ async function fetchGoogleDriveFolders() {
       {
         headers: {
           "X-User-Email": userEmail,
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
       },
     );
@@ -1172,6 +1190,7 @@ async function checkAuthStatus() {
       {
         headers: {
           "X-User-Email": userEmail,
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
       },
     );
@@ -1184,6 +1203,70 @@ async function checkAuthStatus() {
   }
 }
 
+function showSkeletonGrid(count = 6) {
+  const contentList = document.querySelector(".content-list");
+  if (!contentList) return;
+  if (!document.getElementById("skeletonStyles")) {
+    const style = document.createElement("style");
+    style.id = "skeletonStyles";
+    style.textContent = `
+      @keyframes shimmer {
+        0%   { background-position: -600px 0; }
+        100% { background-position:  600px 0; }
+      }
+      .skeleton-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+        width: 100%;
+      }
+      .skeleton-card {
+        background: #fff;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+      }
+      .skeleton-preview {
+        width: 100%;
+        height: 180px;
+        background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+        background-size: 600px 100%;
+        animation: shimmer 1.4s infinite linear;
+      }
+      .skeleton-body {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .skeleton-line {
+        border-radius: 6px;
+        background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+        background-size: 600px 100%;
+        animation: shimmer 1.4s infinite linear;
+      }
+      .skeleton-title-line        { height: 14px; width: 90%; }
+      .skeleton-title-line.short  { width: 60%; }
+      .skeleton-meta-line         { height: 12px; width: 50%; margin-top: 4px; }
+      .skeleton-action-line       { height: 32px; width: 100%; border-radius: 8px; margin-top: 6px; }
+    `;
+    document.head.appendChild(style);
+  }
+  const cards = Array.from({ length: count }, () => `
+    <div class="skeleton-card">
+      <div class="skeleton-preview"></div>
+      <div class="skeleton-body">
+        <div class="skeleton-line skeleton-title-line"></div>
+        <div class="skeleton-line skeleton-title-line short"></div>
+        <div class="skeleton-line skeleton-meta-line"></div>
+        <div class="skeleton-line skeleton-action-line"></div>
+      </div>
+    </div>
+  `).join("");
+  contentList.innerHTML = `<div class="skeleton-grid">${cards}</div>`;
+}
+
 async function loadTeachings() {
   try {
     // Check authentication first
@@ -1192,32 +1275,21 @@ async function loadTeachings() {
       return;
     }
 
-    const userEmail = getCurrentUserEmail();
-    if (!userEmail) {
-      displayEmptyState("User email not found. Please log in again.");
-      return;
-    }
-
-    // Try to use last selected folder
-    const lastFolderId = localStorage.getItem("teachingFolderId");
-
-    // If no folder selected yet, show instructions
-    if (!lastFolderId) {
-      displayEmptyState(
-        'Click "Upload" to select a folder and upload teachings',
-      );
-      return;
-    }
-
+    showSkeletonGrid(6);
+    // Backend merges files from ALL connected Drive accounts — no folder_id needed
     const response = await fetch(
-      `${window.API_BASE_URL}/gdrive/teaching/list-files?folder_id=${lastFolderId}`,
+      `${window.API_BASE_URL}/gdrive/teaching/list-files`,
       {
         headers: {
-          "X-User-Email": userEmail,
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
       },
     );
 
+    if (response.status === 503) {
+      displayEmptyState('No teachings folder configured yet. An admin needs to upload a teaching first.');
+      return;
+    }
     if (!response.ok) {
       throw new Error("Failed to load teachings");
     }
@@ -1426,6 +1498,21 @@ function displayTeachings(teachings) {
         color: #3a4d2c;
         margin-bottom: 0.5rem;
       }
+      .card-gdrive-account {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.78rem;
+        color: #5f6d7e;
+        margin: 4px 0 0 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .card-gdrive-account i {
+        color: #4285f4;
+        flex-shrink: 0;
+      }
       .teaching-actions-modern {
         padding: 12px 12px;
         border-top: 1px solid #f1f5f9;
@@ -1483,19 +1570,12 @@ function displayTeachings(teachings) {
     const fileIcon = getFileIcon(teaching.mimeType);
     const fileSize = formatFileSize(teaching.size);
     const uploadDate = formatDate(teaching.createdTime);
-    const fileType = teaching.mimeType?.split("/")[1]?.toUpperCase() || "FILE";
+    const fileType = getFileTypeLabel(teaching.mimeType);
     const displayTitle = teaching.title || teaching.category || teaching.name;
     const fileName = teaching.name || "";
-    let topic = teaching.topic;
-    if (!topic && teaching.category) {
-      if (
-        teaching.category !== displayTitle &&
-        teaching.category !== teaching.name
-      ) {
-        topic = teaching.category;
-      }
-    }
-    topic = topic || "";
+    // category IS the topic (both sent from the upload form)
+    const topic = teaching.topic || teaching.category || "";
+    const gdriveAccount = teaching._uploaded_by || "";
 
     return `
       <div class="teaching-card-modern teaching-card" data-file-id="${teaching.id}" data-file-url="${teaching.webViewLink || teaching.webContentLink || ''}">
@@ -1512,6 +1592,7 @@ function displayTeachings(teachings) {
           </div>
           <p class="teaching-description-modern teaching-description">${fileType} document</p>
           <p class="teaching-topic-modern teaching-topic"><strong>Topic:</strong> ${escapeHtml(topic)}</p>
+          ${gdriveAccount ? `<p class="card-gdrive-account"><i class="fab fa-google-drive"></i> ${escapeHtml(gdriveAccount)}</p>` : ""}
         </div>
         <div class="teaching-actions-modern teaching-actions">
           <button class="action-btn view" data-action="view">
@@ -1537,13 +1618,13 @@ function createTeachingCard(teaching) {
   const fileIcon = getFileIcon(teaching.mimeType);
   const fileSize = formatFileSize(teaching.size);
   const uploadDate = formatDate(teaching.createdTime);
-  const fileType = teaching.mimeType?.split("/")[1]?.toUpperCase() || "FILE";
+  const fileType = getFileTypeLabel(teaching.mimeType);
 
   // Show title as main title, filename in meta
   const displayTitle = teaching.title || teaching.category || teaching.name;
   const fileName = teaching.name || "";
-  // Only use category as topic if it does not match the title or name
-  let topic = teaching.topic;
+  // category IS the topic
+  let topic = teaching.topic || teaching.category;
   if (!topic && teaching.category) {
     if (
       teaching.category !== displayTitle &&
@@ -1553,6 +1634,7 @@ function createTeachingCard(teaching) {
     }
   }
   topic = topic || "";
+  const gdriveAccount = teaching._uploaded_by || "";
 
   return `
     <div class="teaching-card" data-file-id="${teaching.id}" data-file-url="${teaching.webViewLink || teaching.webContentLink || ''}">
@@ -1569,6 +1651,7 @@ function createTeachingCard(teaching) {
         </div>
         <p class="teaching-description">${fileType} document</p>
         <p class="teaching-topic"><strong>Topic:</strong> ${escapeHtml(topic)}</p>
+        ${gdriveAccount ? `<p class="card-gdrive-account"><i class="fab fa-google-drive"></i> ${escapeHtml(gdriveAccount)}</p>` : ""}
       </div>
       <div class="teaching-actions">
         <button class="action-btn view" data-action="view">
@@ -1702,36 +1785,58 @@ function displayEmptyState(message = "No teachings available") {
 // ===================================
 
 async function deleteTeaching(fileId) {
+  const userEmail = getCurrentUserEmail();
+  if (!userEmail) {
+    showCustomAlert("You must connect a Google Drive account before deleting files.", "error");
+    return;
+  }
+
+  // Check if the file belongs to a different Google Drive account
+  const fileObj = allTeachings.find(t => t.id === fileId);
+  const fileOwner = fileObj?._uploaded_by || "";
+  if (fileOwner && fileOwner !== userEmail) {
+    showToast(
+      `This file belongs to ${fileOwner}. Switch to that Google Drive account to delete it.`,
+      "warning"
+    );
+    return;
+  }
+
   showCustomConfirm(
     "Delete Teaching?",
     "Are you sure you want to delete this teaching? This action cannot be undone.",
     async () => {
       try {
-        const userEmail = getCurrentUserEmail();
-        if (!userEmail) {
-          showCustomAlert("You must be logged in to delete files.", "error");
+        const response = await fetch(
+          `${window.API_BASE_URL}/gdrive/teaching/delete-file/${fileId}`,
+          {
+            method: "DELETE",
+            headers: {
+              "X-User-Email": userEmail,
+              Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+            },
+          },
+        );
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          const detail = err.detail || "";
+          if (response.status === 401 || detail.toLowerCase().includes("not connected") || detail.toLowerCase().includes("insufficientfilepermissions")) {
+            showToast(
+              `Cannot delete: this file belongs to a different Google Drive account${fileOwner ? " (" + fileOwner + ")" : ""}. Switch to that account to delete it.`,
+              "warning"
+            );
+          } else {
+            showToast(detail || "Failed to delete teaching.", "error");
+          }
           return;
         }
-
-    const response = await fetch(
-      `${window.API_BASE_URL}/gdrive/teaching/delete-file/${fileId}`,
-      {
-        method: "DELETE",
-        headers: {
-          "X-User-Email": userEmail,
-        },
-      },
-    );
-
-    if (!response.ok) {
-      throw new Error("Delete failed");
-    }
 
         showToast("Teaching deleted successfully!", "success");
         await loadTeachings();
       } catch (error) {
         console.error("Delete error:", error);
-        showToast(`Failed to delete teaching: ${error.message}`, "error");
+        showToast("Delete error. Please try again.", "error");
       }
     }
   );
@@ -1758,6 +1863,46 @@ function initializeFilters() {
       applyFiltersAndDisplay();
     });
   }
+}
+
+function initTopicSuggestions(inputId, getTopicsFn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const oldBox = document.getElementById(inputId + "-suggestions");
+  if (oldBox) oldBox.remove();
+  const wrap = input.parentElement;
+  wrap.style.position = "relative";
+  const box = document.createElement("div");
+  box.id = inputId + "-suggestions";
+  box.style.cssText =
+    "position:absolute;z-index:9999;background:#fff;border:1px solid #d1d5db;" +
+    "border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:180px;" +
+    "overflow-y:auto;width:100%;display:none;top:calc(100% + 2px);left:0;";
+  wrap.appendChild(box);
+  function render(query) {
+    const topics = [...new Set(getTopicsFn().filter(Boolean))].sort();
+    const q = query.trim().toLowerCase();
+    const matches = q ? topics.filter((t) => t.toLowerCase().includes(q)) : topics;
+    if (!matches.length) { box.style.display = "none"; return; }
+    box.innerHTML = matches
+      .map(
+        (t) =>
+          `<div class="topic-suggestion-item" data-value="${t.replace(/"/g, "&quot;")}"
+            style="padding:9px 14px;cursor:pointer;font-size:14px;color:#333;border-bottom:1px solid #f3f4f6;"
+            onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background=''">${t}</div>`,
+      )
+      .join("");
+    box.style.display = "block";
+  }
+  input.addEventListener("input", () => render(input.value));
+  input.addEventListener("focus", () => render(input.value));
+  box.addEventListener("mousedown", (e) => {
+    const item = e.target.closest(".topic-suggestion-item");
+    if (item) { input.value = item.dataset.value; box.style.display = "none"; }
+  });
+  document.addEventListener("click", (e) => {
+    if (!wrap.contains(e.target)) box.style.display = "none";
+  }, { capture: true });
 }
 
 function populateTopicFilter() {
@@ -1893,6 +2038,29 @@ function initializeSearch() {
 // ===================================
 // UTILITY FUNCTIONS
 // ===================================
+
+function getFileTypeLabel(mimeType) {
+  if (!mimeType) return "FILE";
+  const map = {
+    "application/pdf": "PDF",
+    "application/msword": "DOC",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
+    "application/vnd.ms-excel": "XLS",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "XLSX",
+    "application/vnd.ms-powerpoint": "PPT",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "PPTX",
+    "text/plain": "TXT",
+    "text/csv": "CSV",
+    "application/zip": "ZIP",
+    "application/x-zip-compressed": "ZIP",
+    "video/mp4": "MP4",
+    "video/webm": "WEBM",
+    "audio/mpeg": "MP3",
+    "image/jpeg": "JPG",
+    "image/png": "PNG",
+  };
+  return map[mimeType] || mimeType.split("/").pop().split(".").pop().toUpperCase().slice(0, 8) || "FILE";
+}
 
 function getFileIcon(mimeType) {
   if (!mimeType) return "fas fa-file";

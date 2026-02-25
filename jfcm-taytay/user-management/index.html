@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="robots" content="noindex, nofollow" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>User Management - JFCM Taytay</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -18,6 +19,7 @@
     />
   </head>
   <body>
+    <script>if(!localStorage.getItem('access_token')){window.location.replace('../login/login.html');}</script>
     <header>
       <nav class="navbar">
         <div class="burger" id="burger">☰</div>
@@ -132,6 +134,7 @@
         </div>
       </div>
     </header>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
     <main class="dashboard-main">
       <div class="user-management-header">
         <h1 class="dashboard-title" style="margin-bottom: 0">
@@ -182,6 +185,7 @@
                 type="password"
                 id="addPassword"
                 name="password"
+                minlength="8"
                 required
               />
             </div>
@@ -191,14 +195,15 @@
                 type="password"
                 id="addConfirmPassword"
                 name="confirmPassword"
+                minlength="8"
                 required
               />
             </div>
             <div class="form-group">
               <label for="addRole">Role</label>
               <select id="addRole" name="role" required>
-                <option value="Admin">Admin</option>
-                <option value="User">User</option>
+                <option value="admin">Admin</option>
+                <option value="user">User</option>
               </select>
             </div>
             <div class="form-group">
@@ -249,8 +254,8 @@
               <label for="updateRole">Role</label>
               <select id="updateRole" name="role" required>
                 <option value="">Select a role</option>
-                <option value="Admin">Admin</option>
-                <option value="User">User</option>
+                <option value="admin">Admin</option>
+                <option value="user">User</option>
               </select>
             </div>
             <div class="form-group">
@@ -426,9 +431,9 @@
           <form class="modal-form" id="changePasswordForm">
             <div class="form-group">
               <label for="newPassword">New Password</label>
-              <input type="password" id="newPassword" name="newPassword" required />
+              <input type="password" id="newPassword" name="newPassword" minlength="8" required />
               <label for="confirmNewPassword">Confirm New Password</label>
-              <input type="password" id="confirmNewPassword" name="confirmNewPassword" required />
+              <input type="password" id="confirmNewPassword" name="confirmNewPassword" minlength="8" required />
             </div>
             <div class="form-actions">
               <button type="button" class="btn-cancel" id="changePasswordCancelBtn">Cancel</button>

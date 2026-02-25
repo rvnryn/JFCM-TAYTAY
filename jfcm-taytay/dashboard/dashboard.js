@@ -1,40 +1,3 @@
-// Get burger menu and sidebar elements
-const burger = document.getElementById('burger');
-const sidebar = document.getElementById('sidebar');
-const dashboardMain = document.querySelector('.dashboard-main');
-
-console.log('Burger:', burger);
-console.log('Sidebar:', sidebar);
-
-// Toggle sidebar when burger menu is clicked
-if (burger) {
-  burger.addEventListener('click', () => {
-    console.log('Burger clicked!');
-    sidebar.classList.toggle('active');
-    burger.classList.toggle('active');
-    dashboardMain.classList.toggle('sidebar-open');
-  });
-}
-
-// Close sidebar when a link is clicked
-const sidebarLinks = sidebar.querySelectorAll('a');
-sidebarLinks.forEach(link => {
-  link.addEventListener('click', () => {
-    sidebar.classList.remove('active');
-    burger.classList.remove('active');
-    dashboardMain.classList.remove('sidebar-open');
-  });
-});
-
-// Close sidebar when clicking outside of it
-document.addEventListener('click', (event) => {
-  if (!sidebar.contains(event.target) && !burger.contains(event.target)) {
-    sidebar.classList.remove('active');
-    burger.classList.remove('active');
-    dashboardMain.classList.remove('sidebar-open');
-  }
-});
-
 // Modules dropdown toggle
 const modulesToggle = document.getElementById('modulesToggle');
 const modulesSubmenu = document.getElementById('modulesSubmenu');
@@ -59,8 +22,7 @@ if (uploadBtn && fileInput) {
   fileInput.addEventListener('change', (e) => {
     const files = e.target.files;
     if (files.length > 0) {
-      console.log('File selected:', files[0].name);
-      // You can add logic here to handle the uploaded file
+      // Handle uploaded file here
     }
   });
 }

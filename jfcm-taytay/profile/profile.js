@@ -27,7 +27,7 @@ async function fetchCurrentUser() {
     if (!response.ok) {
       if (response.status === 401) {
         showToast('Session expired. Please login again', 'error');
-        localStorage.removeItem('token');
+        localStorage.removeItem('access_token');
         setTimeout(() => {
           window.location.href = '../login/login.html';
         }, 1500);
@@ -66,26 +66,26 @@ function updateProfileUI(user) {
   });
   
   // Update username
-  const usernameValue = document.querySelector('.profile-info-item:nth-child(1) .profile-info-value');
+  const usernameValue = document.getElementById('profile-username-value');
   if (usernameValue) {
     usernameValue.textContent = user.username;
   }
   
   // Update role (capitalize first letter)
-  const roleValue = document.querySelector('.profile-info-item:nth-child(2) .profile-info-value');
+  const roleValue = document.getElementById('profile-role-value');
   if (roleValue) {
     const roleCapitalized = user.role.charAt(0).toUpperCase() + user.role.slice(1).toLowerCase();
     roleValue.textContent = roleCapitalized;
   }
   
   // Update email
-  const emailValue = document.querySelector('.profile-info-item:nth-child(3) .profile-info-value');
+  const emailValue = document.getElementById('profile-email-value');
   if (emailValue) {
     emailValue.textContent = user.email;
   }
   
   // Update member since (if created_at exists)
-  const memberSinceValue = document.querySelector('.profile-info-item:nth-child(4) .profile-info-value');
+  const memberSinceValue = document.getElementById('profile-member-since-value');
   if (memberSinceValue && user.created_at) {
     const date = new Date(user.created_at);
     const monthYear = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });

@@ -1,4 +1,5 @@
 const API_BASE_URL = window.API_BASE_URL || "http://localhost:8000";
+const _e = window.escapeHtml || (s => String(s ?? ''));
 
 // Helper: Get initials from name
 function getInitials(name) {
@@ -13,7 +14,15 @@ function getInitials(name) {
 // Fetch and display all users
 async function fetchUsers() {
   try {
-    const response = await fetch(`${API_BASE_URL}/users/`);
+    const token = localStorage.getItem("access_token");
+    const response = await fetch(`${API_BASE_URL}/users/`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      showToast(err.detail || "Failed to load users", "error");
+      return;
+    }
     const users = await response.json();
     const cardsGrid = document.querySelector(".cards-grid");
     cardsGrid.innerHTML = "";
@@ -41,11 +50,11 @@ async function fetchUsers() {
             <button class="menu-item archive-item delete-user-btn">Delete User</button>
           </div>
         </div>
-        <div class="user-avatar">${initials}</div>
+        <div class="user-avatar">${_e(initials)}</div>
         <div class="user-info-container">
-          <h3 class="user-name">${user.full_name}</h3>
-          <p class="user-username">@${user.username}</p>
-          <p class="user-role">${user.role || "User"} <span class="user-status">${statusDisplay}</span></p>
+          <h3 class="user-name">${_e(user.full_name)}</h3>
+          <p class="user-username">@${_e(user.username)}</p>
+          <p class="user-role">${_e(user.role || "User")} <span class="user-status">${_e(statusDisplay)}</span></p>
         </div>
       `;
       cardsGrid.appendChild(newCard);
@@ -113,8 +122,8 @@ if (changePasswordForm) {
       showToast("Both password fields are required.", "error");
       return;
     }
-    if (newPassword.length < 6) {
-      showToast("Password must be at least 6 characters.", "error");
+    if (newPassword.length < 8) {
+      showToast("Password must be at least 8 characters.", "error");
       return;
     }
     if (newPassword !== confirmNewPassword) {
@@ -171,7 +180,71 @@ if (changePasswordForm) {
   });
 }
 
+// Show skeleton user cards while fetching
+function showUserSkeletons(count = 6) {
+  const cardsGrid = document.querySelector(".cards-grid");
+  if (!cardsGrid) return;
+  if (!document.getElementById("userSkeletonStyles")) {
+    const style = document.createElement("style");
+    style.id = "userSkeletonStyles";
+    style.textContent = `
+      @keyframes userShimmer {
+        0%   { background-position: -400px 0; }
+        100% { background-position:  400px 0; }
+      }
+      .skeleton-user-card {
+        background: #4A5E42;
+        border-radius: 16px;
+        padding: 12px 16px;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        min-width: 260px;
+        flex: 1 1 260px;
+        max-width: 340px;
+        box-shadow: 0 2px 8px 0 rgba(74,94,66,0.1);
+      }
+      .skeleton-avatar-circle {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        background: linear-gradient(90deg, rgba(255,255,255,0.12) 25%, rgba(255,255,255,0.22) 50%, rgba(255,255,255,0.12) 75%);
+        background-size: 400px 100%;
+        animation: userShimmer 1.4s infinite linear;
+      }
+      .skeleton-user-lines {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        flex: 1;
+      }
+      .skeleton-user-line {
+        border-radius: 5px;
+        background: linear-gradient(90deg, rgba(255,255,255,0.12) 25%, rgba(255,255,255,0.22) 50%, rgba(255,255,255,0.12) 75%);
+        background-size: 400px 100%;
+        animation: userShimmer 1.4s infinite linear;
+      }
+      .sul-name   { height: 14px; width: 70%; }
+      .sul-user   { height: 11px; width: 50%; }
+      .sul-role   { height: 11px; width: 40%; }
+    `;
+    document.head.appendChild(style);
+  }
+  cardsGrid.innerHTML = Array.from({ length: count }, () => `
+    <div class="skeleton-user-card">
+      <div class="skeleton-avatar-circle"></div>
+      <div class="skeleton-user-lines">
+        <div class="skeleton-user-line sul-name"></div>
+        <div class="skeleton-user-line sul-user"></div>
+        <div class="skeleton-user-line sul-role"></div>
+      </div>
+    </div>
+  `).join("");
+}
+
 // Load users on page load
+showUserSkeletons(6);
 fetchUsers();
 
 // User Management page specific JavaScript
@@ -261,8 +334,8 @@ function openUpdateModal(card) {
   let role = card.dataset.userRole || "";
   role = role.trim();
   let roleValue = "";
-  if (role.toLowerCase() === "admin") roleValue = "Admin";
-  else if (role.toLowerCase() === "user") roleValue = "User";
+  if (role.toLowerCase() === "admin") roleValue = "admin";
+  else if (role.toLowerCase() === "user") roleValue = "user";
   document.getElementById("fullName").value = fullName;
   document.getElementById("username").value = username;
   document.getElementById("email").value = email;
@@ -305,11 +378,10 @@ function openAddUserModal() {
   if (addEmail) addEmail.value = "";
   if (addPassword) addPassword.value = "";
   if (addConfirmPassword) addConfirmPassword.value = "";
-  if (role) role.value = "User";
   if (addStatus) addStatus.checked = true;
   if (addStatusText) addStatusText.textContent = "Active";
     const addRole = document.getElementById("addRole");
-    if (addRole) addRole.value = "User";
+    if (addRole) addRole.value = "user";
 }
 
 function closeAddUserModal() {
@@ -373,7 +445,7 @@ if (updateForm) {
     // Set values and mark changed items with from/to format
     if (fullName !== originalFullName) {
       document.getElementById("confirmUpdateFullName").innerHTML =
-        `<span class=\"from-value\">${originalFullName}</span> → <span class=\"to-value\">${fullName}</span>`;
+        `<span class="from-value">${_e(originalFullName)}</span> → <span class="to-value">${_e(fullName)}</span>`;
       confirmFullNameItem.classList.add("changed");
     } else {
       document.getElementById("confirmUpdateFullName").textContent = fullName;
@@ -381,7 +453,7 @@ if (updateForm) {
 
     if (username !== originalUsername) {
       document.getElementById("confirmUpdateUsername").innerHTML =
-        `<span class=\"from-value\">${originalUsername}</span> → <span class=\"to-value\">${username}</span>`;
+        `<span class="from-value">${_e(originalUsername)}</span> → <span class="to-value">${_e(username)}</span>`;
       confirmUsernameItem.classList.add("changed");
     } else {
       document.getElementById("confirmUpdateUsername").textContent = username;
@@ -389,7 +461,7 @@ if (updateForm) {
 
     if (email !== originalEmail) {
       document.getElementById("confirmUpdateEmail").innerHTML =
-        `<span class=\"from-value\">${originalEmail}</span> → <span class=\"to-value\">${email}</span>`;
+        `<span class="from-value">${_e(originalEmail)}</span> → <span class="to-value">${_e(email)}</span>`;
       confirmEmailItem.classList.add("changed");
     } else {
       document.getElementById("confirmUpdateEmail").textContent = email;
@@ -402,7 +474,7 @@ if (updateForm) {
       role.toLowerCase() !== originalRole.toLowerCase()
     ) {
       document.getElementById("confirmUpdateRole").innerHTML =
-        `<span class=\"from-value\">${originalRole}</span> → <span class=\"to-value\">${role}</span>`;
+        `<span class="from-value">${_e(originalRole)}</span> → <span class="to-value">${_e(role)}</span>`;
       confirmRoleItem.classList.add("changed");
     } else {
       document.getElementById("confirmUpdateRole").textContent = role;
@@ -412,7 +484,7 @@ if (updateForm) {
     const originalStatusText = originalIsActive ? "Active" : "Inactive";
     if (newIsActive !== originalIsActive) {
       document.getElementById("confirmUpdateStatus").innerHTML =
-        `<span class=\"from-value\">${originalStatusText}</span> → <span class=\"to-value\">${newStatusText}</span>`;
+        `<span class="from-value">${_e(originalStatusText)}</span> → <span class="to-value">${_e(newStatusText)}</span>`;
       confirmStatusItem.classList.add("changed");
     } else {
       document.getElementById("confirmUpdateStatus").textContent =
@@ -502,9 +574,9 @@ document
           fetchCurrentUserForSidebar();
         }
       } else {
+        const errorData = await response.json().catch(() => ({}));
         document.getElementById("updateConfirmModal").classList.remove("show");
-        await fetchUsers();
-        showToast("User updated successfully!", "success");
+        showToast(errorData.detail || "Failed to update user", "error");
         if (typeof fetchCurrentUserForSidebar === "function") {
           fetchCurrentUserForSidebar();
         }
@@ -553,8 +625,8 @@ addUserForm.addEventListener("submit", async (e) => {
     showToast("Passwords do not match.", "error");
     return;
   }
-  if (password.length < 6) {
-    showToast("Password must be at least 6 characters.", "error");
+  if (password.length < 8) {
+    showToast("Password must be at least 8 characters.", "error");
     return;
   }
 
@@ -586,8 +658,8 @@ document.getElementById("addConfirmBtn").addEventListener("click", async () => {
     showToast("Passwords do not match.", "error");
     return;
   }
-  if (password.length < 6) {
-    showToast("Password must be at least 6 characters.", "error");
+  if (password.length < 8) {
+    showToast("Password must be at least 8 characters.", "error");
     return;
   }
 
@@ -641,7 +713,7 @@ document.getElementById("addConfirmBtn").addEventListener("click", async () => {
   } catch (error) {
     console.error("Error adding user:", error);
     document.getElementById("addConfirmModal").classList.remove("show");
-    showToast("Failed to add user", "error");
+    showToast(error.message || "Failed to add user", "error");
   }
 });
 

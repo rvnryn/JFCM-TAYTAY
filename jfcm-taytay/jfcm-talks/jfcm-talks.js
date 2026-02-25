@@ -1,8 +1,14 @@
 /* JFCM Talks page JavaScript */
 
 // API Configuration
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = window.API_BASE_URL || 'http://localhost:8000';
 const API_ENDPOINT = `${API_BASE_URL}/api/jfcm-talks`;
+
+// Use global escapeHtml from config.js (with inline fallback for safety)
+const escapeHtml = window.escapeHtml || function (str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+};
 let currentUser = null; // Store current user info
 
 // Fetch current user info
@@ -50,7 +56,70 @@ function applyRoleBasedUI() {
   }
 }
 
+function showSkeletonGrid(count = 6) {
+  const contentList = document.querySelector('.content-list');
+  if (!contentList) return;
+  if (!document.getElementById('skeletonStyles')) {
+    const style = document.createElement('style');
+    style.id = 'skeletonStyles';
+    style.textContent = `
+      @keyframes shimmer {
+        0%   { background-position: -600px 0; }
+        100% { background-position:  600px 0; }
+      }
+      .skeleton-grid {
+        display: contents;
+      }
+      .skeleton-card {
+        background: #fff;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+      }
+      .skeleton-preview {
+        width: 100%;
+        padding-bottom: 56.25%;
+        height: 0;
+        background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+        background-size: 600px 100%;
+        animation: shimmer 1.4s infinite linear;
+      }
+      .skeleton-body {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .skeleton-line {
+        border-radius: 6px;
+        background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+        background-size: 600px 100%;
+        animation: shimmer 1.4s infinite linear;
+      }
+      .skeleton-title-line        { height: 14px; width: 90%; }
+      .skeleton-title-line.short  { width: 60%; }
+      .skeleton-meta-line         { height: 12px; width: 50%; margin-top: 4px; }
+      .skeleton-action-line       { height: 32px; width: 100%; border-radius: 8px; margin-top: 6px; }
+    `;
+    document.head.appendChild(style);
+  }
+  const cards = Array.from({ length: count }, () => `
+    <div class="skeleton-card">
+      <div class="skeleton-preview"></div>
+      <div class="skeleton-body">
+        <div class="skeleton-line skeleton-title-line"></div>
+        <div class="skeleton-line skeleton-title-line short"></div>
+        <div class="skeleton-line skeleton-meta-line"></div>
+        <div class="skeleton-line skeleton-action-line"></div>
+      </div>
+    </div>
+  `).join('');
+  contentList.innerHTML = `<div class="skeleton-grid">${cards}</div>`;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+  showSkeletonGrid(6);
   // Fetch current user first
   await fetchCurrentUser();
   applyRoleBasedUI();
@@ -206,13 +275,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   closeYoutubeModal.addEventListener('click', () => {
     youtubeModal.style.display = 'none';
     youtubeUploadForm.reset();
-    customTopicGroup.style.display = 'none';
   });
 
   cancelYoutubeBtn.addEventListener('click', () => {
     youtubeModal.style.display = 'none';
     youtubeUploadForm.reset();
-    customTopicGroup.style.display = 'none';
   });
 
   // No custom topic logic needed, topic is now a free text input
@@ -241,18 +308,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Validate YouTube link
     const videoId = extractYouTubeId(youtubeLink);
     if (!videoId) {
-      alert('Please enter a valid YouTube link');
+      showToast('Please enter a valid YouTube link', 'error');
       return;
     }
 
     // Get authentication token from localStorage
     const token = localStorage.getItem('access_token');
     
-    console.log('Token check:', token ? 'Token exists' : 'No token found');
-    
     if (!token) {
-      alert('You must be logged in to upload videos. Redirecting to login...');
-      window.location.href = '../login/login.html';
+      showToast('You must be logged in to upload videos. Redirecting to login...', 'error');
+      setTimeout(() => { window.location.href = '../login/login.html'; }, 1500);
       return;
     }
 
@@ -264,11 +329,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       description: description || null
     };
 
-    console.log('Uploading video with data:', videoData);
-
     try {
       // Send to backend API
-      const response = await fetch('http://localhost:8000/api/jfcm-talks/upload/youtube', {
+      const response = await fetch(`${API_ENDPOINT}/upload/youtube`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -277,26 +340,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         body: JSON.stringify(videoData)
       });
 
-      console.log('Response status:', response.status);
-
       const result = await response.json();
 
       if (!response.ok) {
         // Handle specific error cases
         if (response.status === 401 || response.status === 403) {
-          alert('Your session has expired. Please log in again.');
+          showToast('Your session has expired. Please log in again.', 'error');
           localStorage.removeItem('access_token');
-          window.location.href = '../login/login.html';
+          setTimeout(() => { window.location.href = '../login/login.html'; }, 1500);
           return;
         }
         throw new Error(result.detail || 'Failed to upload video');
       }
-
-      console.log('Upload successful:', result);
       showToast('YouTube video uploaded successfully!', 'success');
       youtubeModal.style.display = 'none';
       youtubeUploadForm.reset();
-      customTopicGroup.style.display = 'none';
       
       loadVideosFromBackend();
     } catch (error) {
@@ -315,7 +373,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (e.target === youtubeModal) {
       youtubeModal.style.display = 'none';
       youtubeUploadForm.reset();
-      customTopicGroup.style.display = 'none';
     }
   });
 
@@ -401,8 +458,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // Determine the correct endpoint based on video source
       const deleteUrl = source === 'ia' 
-        ? `http://localhost:8000/api/jfcm-talks/delete-video/${identifier}?hard_delete=false`
-        : `http://localhost:8000/api/jfcm-talks/videos/${id}`;
+        ? `${API_ENDPOINT}/delete-video/${identifier}?hard_delete=false`
+        : `${API_ENDPOINT}/videos/${id}`;
 
       // Send delete request
       const response = await fetch(deleteUrl, {
@@ -463,8 +520,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function loadVideos(topic = 'all', sort = 'newest') {
     const contentList = document.querySelector('.content-list');
     
-    console.log('Loading videos with:', { topic, sort });
-    
     // Show loading state
     contentList.innerHTML = `
       <div class="loading-state">
@@ -483,8 +538,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         params.append('sort', sort);
       }
       
-      const url = `http://localhost:8000/api/jfcm-talks/videos${params.toString() ? '?' + params.toString() : ''}`;
-      console.log('Fetching URL:', url);
+      const url = `${API_ENDPOINT}/videos${params.toString() ? '?' + params.toString() : ''}`;
       const response = await fetch(url);
       const data = await response.json();
       
@@ -538,11 +592,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // Display videos
       contentList.innerHTML = data.videos.map(video => `
-        <div class="video-card" data-video-id="${video.youtubeVideoId}">
+        <div class="video-card" data-video-id="${escapeHtml(video.youtubeVideoId)}">
           <div class="video-thumbnail-wrapper">
             <img 
-              src="https://img.youtube.com/vi/${video.youtubeVideoId}/maxresdefault.jpg" 
-              alt="${video.title}" 
+              src="https://img.youtube.com/vi/${escapeHtml(video.youtubeVideoId)}/maxresdefault.jpg" 
+              alt="${escapeHtml(video.title)}" 
               class="video-thumbnail"
               ${getThumbnailFallback(video.youtubeVideoId)}
             />
@@ -550,23 +604,23 @@ document.addEventListener('DOMContentLoaded', async () => {
               <i class="fab fa-youtube"></i>
             </div>
             <div class="play-overlay">
-              <button class="play-button" data-video-id="${video.youtubeVideoId}" aria-label="Play video">
+              <button class="play-button" data-video-id="${escapeHtml(video.youtubeVideoId)}" aria-label="Play video">
                 <i class="fas fa-play"></i>
               </button>
             </div>
           </div>
           <div class="video-info">
-            <h3 class="video-title">${video.title}</h3>
+            <h3 class="video-title">${escapeHtml(video.title)}</h3>
             <div class="video-meta">
-              <span class="video-topic">${video.customTopic || video.topic}</span>
+              <span class="video-topic">${escapeHtml(video.customTopic || video.topic)}</span>
               <span class="video-date"><i class="fas fa-calendar"></i> ${formatDate(video.uploadedAt)}</span>
             </div>
-            ${video.description ? `<p class="video-description">${video.description}</p>` : ''}
+            ${video.description ? `<p class="video-description">${escapeHtml(video.description)}</p>` : ''}
             <div class="video-actions">
-              <a href="${video.youtubeLink}" target="_blank" class="btn-watch-external">
+              <a href="${escapeHtml(video.youtubeLink)}" target="_blank" class="btn-watch-external">
                 <i class="fas fa-external-link-alt"></i> Open in New Tab
               </a>
-              <button class="btn-delete" data-video-id="${video.id}" data-video-title="${video.title}">
+              <button class="btn-delete" data-video-id="${escapeHtml(video.id)}" data-video-title="${escapeHtml(video.title)}">
                 <i class="fas fa-trash-alt"></i> Delete
               </button>
             </div>
@@ -632,15 +686,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (matches.length > 0) {
       searchSuggestions.innerHTML = matches.slice(0, 5).map(video => {
-        // Highlight matching text
+        // Highlight matching text (escape all parts before inserting into HTML)
         const titleLower = video.title.toLowerCase();
         const index = titleLower.indexOf(query);
-        const before = video.title.substring(0, index);
-        const match = video.title.substring(index, index + query.length);
-        const after = video.title.substring(index + query.length);
+        const before = escapeHtml(video.title.substring(0, index));
+        const match = escapeHtml(video.title.substring(index, index + query.length));
+        const after = escapeHtml(video.title.substring(index + query.length));
         
         return `
-          <div class="search-suggestion-item" data-video-id="${video.youtubeVideoId}" data-title="${video.title}">
+          <div class="search-suggestion-item" data-video-id="${escapeHtml(video.youtubeVideoId)}" data-title="${escapeHtml(video.title)}">
             ${before}<mark>${match}</mark>${after}
           </div>
         `;
@@ -782,36 +836,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Load videos from both YouTube and Internet Archive backends
   async function loadVideosFromBackend() {
-    const contentList = document.querySelector('.content-list');
-    
-    contentList.innerHTML = `
-      <div class="loading-state">
-        <div class="loading-spinner"></div>
-        <p>Loading videos...</p>
-      </div>
-    `;
-    
+    showSkeletonGrid(6);
     try {
       // Fetch only from YouTube endpoint
       const youtubeResponse = await fetch(`${API_ENDPOINT}/videos?limit=50`).catch(err => {
-        console.log('YouTube endpoint error:', err);
         return { ok: false };
       });
-      
-      console.log('YouTube response:', youtubeResponse.ok);
       
       let allVideosList = [];
       
       // Process YouTube videos
       if (youtubeResponse.ok) {
         const youtubeData = await youtubeResponse.json();
-        console.log('YouTube data:', youtubeData);
         if (youtubeData.videos) {
           allVideosList = youtubeData.videos.map(v => ({ ...v, source: 'youtube' }));
         }
       }
-
-      console.log('Total videos loaded:', allVideosList.length);
       allVideos = allVideosList;
         populateTopicFilterDropdown(allVideosList);
         displayBackendVideos(allVideosList);
@@ -859,12 +899,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const selectedTopic = topicSelect.value || 'all';
     
     if (!videos || videos.length === 0) {
+      const token = localStorage.getItem('access_token');
+      const user = token ? parseJwt(token) : null;
+      const isAdmin = user && user.role === 'admin';
       contentList.innerHTML = `
         <div class="empty-state">
           <i class="fas fa-inbox empty-icon"></i>
-        const token = localStorage.getItem('access_token');
-        const user = token ? parseJwt(token) : null;
-        const isAdmin = user && user.role === 'admin';
+          <p>No talks available${isAdmin ? '. Use the Upload button to add a video.' : '.'}</p>
+        </div>
       `;
       return;
     }
@@ -877,9 +919,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const filterTopic = selectedTopic.toLowerCase().trim();
         return videoTopic === filterTopic;
       });
-      
-      console.log('Filtering by topic:', selectedTopic);
-      console.log('Filtered videos:', filteredVideos);
     }
 
     if (filteredVideos.length === 0) {
@@ -928,23 +967,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       const description = video.description || '';
       const uploadDate = video.uploadedAt || video.uploaded_at;
       
-      console.log('Rendering video:', {
-        title: video.title,
-        isYouTube,
-        isIA,
-        videoId,
-        topic,
-        source: video.source
-      });
-      
       try {
         return `
-          <div class="video-card" data-video-id="${videoId}">
+          <div class="video-card" data-video-id="${escapeHtml(videoId)}">
             <div class="video-thumbnail-wrapper">
               ${isYouTube ? `
                 <img 
-                  src="https://img.youtube.com/vi/${videoId}/maxresdefault.jpg" 
-                  alt="${video.title}" 
+                  src="https://img.youtube.com/vi/${escapeHtml(videoId)}/maxresdefault.jpg" 
+                  alt="${escapeHtml(video.title)}" 
                   class="video-thumbnail"
                   ${getThumbnailFallback(videoId)}
                 />
@@ -952,14 +982,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                   <i class="fab fa-youtube"></i>
                 </div>
                 <div class="play-overlay">
-                  <button class="play-button" data-video-id="${videoId}" aria-label="Play video">
+                  <button class="play-button" data-video-id="${escapeHtml(videoId)}" aria-label="Play video">
                     <i class="fas fa-play"></i>
                   </button>
                 </div>
               ` : `
                 ${video.embed_url && video.embed_url !== 'pending' ? `
                   <iframe 
-                    src="${video.embed_url}" 
+                    src="${escapeHtml(video.embed_url)}" 
                     frameborder="0" 
                     allowfullscreen
                     webkitallowfullscreen
@@ -977,7 +1007,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
             <div class="video-info">
               <h3 class="video-title">
-                ${video.title}
+                ${escapeHtml(video.title)}
                 ${(!video.embed_url || video.embed_url === 'pending') && isIA ? `
                   <span class="upload-badge">
                     <i class="fas fa-cloud-upload-alt"></i> Processing...
@@ -985,17 +1015,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ` : ''}
               </h3>
               <div class="video-meta">
-                <span class="video-topic">${topic}</span>
+                <span class="video-topic">${escapeHtml(topic)}</span>
                 <span class="video-date"><i class="fas fa-calendar"></i> ${formatDate(uploadDate)}</span>
               </div>
-              ${description ? `<p class="video-description">${description}</p>` : ''}
+              ${description ? `<p class="video-description">${escapeHtml(description)}</p>` : ''}
               <div class="video-actions">
                 ${videoUrl && videoUrl !== 'pending' ? `
-                  <a href="${videoUrl}" target="_blank" class="btn-watch-external">
+                  <a href="${escapeHtml(videoUrl)}" target="_blank" class="btn-watch-external">
                     <i class="fas fa-external-link-alt"></i> Open in New Tab
                   </a>
                 ` : ''}
-                <button class="btn-delete admin-only" data-video-id="${video.id}" data-video-title="${video.title}" data-source="${video.source}" data-identifier="${videoId}">
+                <button class="btn-delete admin-only" data-video-id="${escapeHtml(video.id)}" data-video-title="${escapeHtml(video.title)}" data-source="${escapeHtml(video.source)}" data-identifier="${escapeHtml(videoId)}">
                   <i class="fas fa-trash-alt"></i> Delete
                 </button>
               </div>
@@ -1007,9 +1037,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         return '';
       }
     }).join('');
-
-    console.log('HTML content length:', htmlContent.length);
-    console.log('HTML preview:', htmlContent.substring(0, 200));
     
     contentList.innerHTML = htmlContent;
 
