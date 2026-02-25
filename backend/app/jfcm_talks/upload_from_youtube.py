@@ -9,6 +9,7 @@ from database.deps import get_db
 from app.auth.me import get_current_user
 from app.models.userModel import User
 from sqlalchemy import text
+from app.utils.cache import get as cache_get, set as cache_set, invalidate_prefix as cache_invalidate_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +155,7 @@ async def upload_youtube_video(
         )
         
         db.commit()
+        cache_invalidate_prefix("jfcm_talks_videos_")
         
         # Get the inserted record
         new_video = result.fetchone()
@@ -194,6 +196,11 @@ async def get_all_videos(
     
     Optional filters: topic, sort (newest/oldest)
     """
+    cache_key = f"jfcm_talks_videos_{topic or 'all'}_{sort}_{skip}_{limit}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     try:
         # Build query
         query = """
@@ -247,11 +254,13 @@ async def get_all_videos(
             }
             videos_list.append(video_data)
         
-        return {
+        response = {
             'success': True,
             'count': len(videos_list),
             'videos': videos_list
         }
+        cache_set(cache_key, response, ttl=30)
+        return response
         
     except Exception as e:
         logger.error("Error fetching videos: %s", e)
@@ -363,6 +372,7 @@ async def delete_video(
         )
         
         db.commit()
+        cache_invalidate_prefix("jfcm_talks_videos_")
         
         return {
             'success': True,
