@@ -10,7 +10,6 @@ A full-stack web application for **Jesus First Christian Ministries Taytay** —
 |---|---|
 | Frontend | https://jfcm-taytay.vercel.app |
 | Backend API | https://jfcm-taytay.onrender.com |
-| API Docs | https://jfcm-taytay.onrender.com/docs |
 
 ---
 
