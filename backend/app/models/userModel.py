@@ -2,8 +2,8 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 from database.database import Base
-from pydantic import BaseModel, EmailStr
-from typing import Optional
+from pydantic import BaseModel, EmailStr, field_validator
+from typing import Optional, Literal
 
 class User(Base):
     __tablename__ = "users"
@@ -24,7 +24,14 @@ class UserCreate(BaseModel):
     username: str
     email: EmailStr
     password: str
-    role: str
+    role: Literal["admin", "user"] = "user"
+
+    @field_validator("password")
+    @classmethod
+    def password_min_length(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
 
 class UserOut(BaseModel):
     id: int
@@ -42,5 +49,16 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     username: Optional[str] = None
     email: Optional[EmailStr] = None
-    role: Optional[str] = None
+    role: Optional[Literal["admin", "user"]] = None
     is_active: Optional[bool] = None
+
+
+class PasswordChangeRequest(BaseModel):
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_min_length(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v

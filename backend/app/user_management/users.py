@@ -1,42 +1,62 @@
+import logging
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.auth.rbac import require_admin
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 
 from database.deps import get_db
-from app.models.userModel import User, UserCreate, UserOut, UserUpdate
-from pydantic import BaseModel
-class PasswordChangeRequest(BaseModel):
-    new_password: str
+from app.models.userModel import User, UserCreate, UserOut, UserUpdate, PasswordChangeRequest
 from app.auth.utils.authUtils import hash_password
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/users",
     tags=["Users"]
 )
 
-# Get All Users
-@router.get("/", response_model=List[UserOut])
-def get_all_users(db: Session = Depends(get_db)):
-    users = db.query(User).all()
+# Get All Users — admin only + paginated
+@router.get("/", response_model=List[UserOut], dependencies=[Depends(require_admin)])
+def get_all_users(
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db)
+):
+    users = db.query(User).offset(skip).limit(limit).all()
     return users
 
 @router.post("/", response_model=UserOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
 def create_user(user_in: UserCreate, db: Session = Depends(get_db)):
-    
-    user = User(
-        full_name=user_in.full_name,
-        username=user_in.username.strip().lower(),
-        email=user_in.email.strip().lower(),
-        password_hash=hash_password(user_in.password),
-        role=user_in.role,
-        is_active=True
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
+    from sqlalchemy import func
+    email_lower = user_in.email.strip().lower()
+    username_lower = user_in.username.strip().lower()
+
+    existing_email = db.query(User).filter(func.lower(User.email) == email_lower).first()
+    if existing_email:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    existing_username = db.query(User).filter(func.lower(User.username) == username_lower).first()
+    if existing_username:
+        raise HTTPException(status_code=400, detail="Username already taken")
+
+    try:
+        user = User(
+            full_name=user_in.full_name,
+            username=username_lower,
+            email=email_lower,
+            password_hash=hash_password(user_in.password),
+            role=user_in.role,
+            is_active=True
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Username or email already exists")
 
 @router.put("/{user_id}", response_model=UserOut, dependencies=[Depends(require_admin)])
 def update_user(
@@ -104,22 +124,8 @@ def update_user(
 
     # ---------- ROLE ----------
     if user_in.role is not None:
-        role = user_in.role.strip().lower()
+        user.role = user_in.role.strip().lower()
 
-        if role != user.role:
-            existing = db.query(User).filter(
-                User.role == role,
-                User.id != user_id
-            ).first()
-
-            if existing:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Role already taken"
-                )
-
-            user.role = role
-            
     db.commit()
     db.refresh(user)
     # Notify user if email was changed

@@ -1,13 +1,16 @@
-from fastapi import APIRouter, HTTPException, Depends, status, Header
+import logging
+import re
+from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Optional
-import re
 from datetime import datetime
 from database.deps import get_db
 from app.auth.me import get_current_user
 from app.models.userModel import User
 from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 
 # Create Router
 router = APIRouter(prefix="/api/jfcm-talks", tags=["JFCM Talks - YouTube"])
@@ -76,7 +79,7 @@ async def upload_youtube_video(
     Requires JWT authentication
     """
     try:
-        print(f"Current user: {current_user.username} (ID: {current_user.id})")  # Debug log
+        logger.debug("Upload YouTube request by user_id=%s username=%s", current_user.id, current_user.username)
         
         # Extract YouTube video ID
         video_id = extract_youtube_id(data.youtubeLink)
@@ -172,7 +175,7 @@ async def upload_youtube_video(
         raise
     except Exception as e:
         db.rollback()
-        print(f"Error uploading YouTube video: {str(e)}")
+        logger.error("Error uploading YouTube video: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to upload video: {str(e)}"
@@ -182,7 +185,9 @@ async def upload_youtube_video(
 async def get_all_videos(
     db: Session = Depends(get_db),
     topic: Optional[str] = None,
-    sort: Optional[str] = "newest"
+    sort: Optional[str] = "newest",
+    skip: int = 0,
+    limit: int = 50
 ):
     """
     Get all JFCM Talks videos
@@ -212,6 +217,10 @@ async def get_all_videos(
             query += " ORDER BY uploaded_at ASC"
         else:
             query += " ORDER BY uploaded_at DESC"
+
+        query += " LIMIT :limit OFFSET :skip"
+        params["limit"] = limit
+        params["skip"] = skip
         
         # Execute query
         result = db.execute(text(query), params)
@@ -245,7 +254,7 @@ async def get_all_videos(
         }
         
     except Exception as e:
-        print(f"Error fetching videos: {str(e)}")
+        logger.error("Error fetching videos: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch videos: {str(e)}"
@@ -302,7 +311,7 @@ async def validate_youtube_url(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error validating YouTube URL: {str(e)}")
+        logger.error("Error validating YouTube URL: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to validate URL: {str(e)}"
@@ -364,7 +373,7 @@ async def delete_video(
         raise
     except Exception as e:
         db.rollback()
-        print(f"Error deleting video: {str(e)}")
+        logger.error("Error deleting video id=%s: %s", video_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete video: {str(e)}"

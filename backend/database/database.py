@@ -12,7 +12,13 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL is not set")
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"prepare_threshold": None},
+    pool_pre_ping=True,
+    pool_size=10,
+    max_overflow=20,
+)
 
 SessionLocal = sessionmaker(
     autocommit=False,
@@ -22,4 +28,3 @@ SessionLocal = sessionmaker(
 
 Base = declarative_base()
 from app.models.user_credentialsModel import UserCredential
-Base.metadata.create_all(bind=engine)

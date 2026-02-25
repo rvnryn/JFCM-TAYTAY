@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Depends, Header
 from fastapi.responses import HTMLResponse
 from google.oauth2.credentials import Credentials
@@ -10,8 +11,14 @@ from datetime import datetime
 import os
 import json
 import io
+import traceback
 from database.deps import get_db
 from app.models.user_credentialsModel import UserCredential
+from app.models.appSettingModel import AppSetting
+from app.models.userModel import User
+from app.auth.me import get_current_user as get_jwt_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/gdrive/sow1", tags=["Google Drive - SOW1"])
 
@@ -21,19 +28,20 @@ router = APIRouter(prefix="/gdrive/sow1", tags=["Google Drive - SOW1"])
 
 async def get_current_user(
     user_email: str = Header(..., alias="X-User-Email"),
+    _jwt_user: User = Depends(get_jwt_user),  # Ensures valid app login
     db: Session = Depends(get_db)
 ) -> UserCredential:
-    """Get authenticated user from header"""
+    """Verify JWT, then return the Google OAuth credentials by Google email."""
     user_cred = db.query(UserCredential).filter(
         UserCredential.email == user_email
     ).first()
-    
+
     if not user_cred:
         raise HTTPException(
             status_code=401,
-            detail=f"User {user_email} not authenticated"
+            detail="Google Drive not connected. Please authorize at /gdrive/sow1/auth/login"
         )
-    
+
     return user_cred
 
 # Path to credentials.json file
@@ -106,13 +114,23 @@ def get_drive_service(user_id: str, db: Session):
             detail="Not authenticated. Please visit /gdrive/sow1/auth/login first."
         )
     
+    # Parse scopes - stored as comma-separated string or JSON array
+    scopes_raw = user_cred.scopes
+    if scopes_raw:
+        try:
+            scopes = json.loads(scopes_raw)
+        except (json.JSONDecodeError, ValueError):
+            scopes = [s.strip() for s in scopes_raw.split(',') if s.strip()]
+    else:
+        scopes = []
+
     credentials = Credentials(
         token=user_cred.token,
         refresh_token=user_cred.refresh_token,
         token_uri=user_cred.token_uri,
         client_id=user_cred.client_id,
         client_secret=user_cred.client_secret,
-        scopes=json.loads(user_cred.scopes) if user_cred.scopes else []
+        scopes=scopes
     )
     
     # Auto-refresh expired tokens
@@ -139,8 +157,7 @@ def get_user_email_from_token(credentials):
             
         return email
     except Exception as e:
-        # Log the error for debugging
-        print(f"Error getting user email: {str(e)}")
+        logger.error("Error getting user email from Google: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get user email from Google: {str(e)}"
@@ -254,93 +271,119 @@ async def callback(code: str, state: str = None, db: Session = Depends(get_db)):
 
         # Return HTML page that closes window and signals success
         html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Authentication Successful</title>
-            <style>
-                body {{
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    height: 100vh;
-                    margin: 0;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                }}
-                .success-box {{
-                    background: white;
-                    padding: 40px;
-                    border-radius: 16px;
-                    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-                    text-align: center;
-                    max-width: 400px;
-                }}
-                .checkmark {{
-                    width: 80px;
-                    height: 80px;
-                    border-radius: 50%;
-                    background: #4CAF50;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    margin: 0 auto 20px;
-                    animation: scaleIn 0.5s ease;
-                }}
-                .checkmark svg {{
-                    width: 50px;
-                    height: 50px;
-                    fill: white;
-                }}
-                h1 {{
-                    color: #2c3e50;
-                    margin: 0 0 10px;
-                    font-size: 24px;
-                }}
-                p {{
-                    color: #7f8c8d;
-                    margin: 0 0 20px;
-                }}
-                .email {{
-                    color: #667eea;
-                    font-weight: 600;
-                }}
-                @keyframes scaleIn {{
-                    from {{
-                        transform: scale(0);
-                    }}
-                    to {{
-                        transform: scale(1);
-                    }}
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="success-box">
-                <div class="checkmark">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
-                    </svg>
-                </div>
-                <h1>{message}</h1>
-                <p>Email: <span class="email">{google_email}</span></p>
-                <p>This window will close automatically...</p>
-            </div>
-            <script>
-                // Signal success to parent window
-                if (window.opener) {{
-                    window.opener.postMessage({{
-                        type: 'google-auth-success',
-                        email: '{google_email}'
-                    }}, '*');
-                }}
-                // Close window after 2 seconds
-                setTimeout(() => {{
-                    window.close();
-                }}, 2000);
-            </script>
-        </body>
-        </html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connected — JFCM Taytay</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f0f4ff;
+        }}
+        .card {{
+            background: #fff;
+            border-radius: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.07), 0 20px 60px -10px rgba(99,102,241,0.18);
+            padding: 48px 40px 40px;
+            width: 380px;
+            text-align: center;
+            animation: slideUp 0.5s cubic-bezier(0.16,1,0.3,1);
+        }}
+        @keyframes slideUp {{
+            from {{ opacity: 0; transform: translateY(24px); }}
+            to   {{ opacity: 1; transform: translateY(0); }}
+        }}
+        .brand {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 32px;
+        }}
+        .brand-dot {{ width: 10px; height: 10px; border-radius: 50%; background: #6366f1; }}
+        .brand-dot:nth-child(2) {{ background: #8b5cf6; width: 7px; height: 7px; }}
+        .brand-dot:nth-child(3) {{ background: #a78bfa; width: 5px; height: 5px; }}
+        .brand-name {{ font-size: 13px; font-weight: 600; color: #6366f1; letter-spacing: 0.08em; text-transform: uppercase; }}
+        .icon-wrap {{
+            width: 88px; height: 88px; border-radius: 50%;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 24px;
+            box-shadow: 0 8px 24px rgba(34,197,94,0.35);
+            animation: popIn 0.5s 0.2s cubic-bezier(0.34,1.56,0.64,1) both;
+        }}
+        @keyframes popIn {{
+            from {{ opacity: 0; transform: scale(0.4); }}
+            to   {{ opacity: 1; transform: scale(1); }}
+        }}
+        .icon-wrap svg {{ width: 44px; height: 44px; fill: white; }}
+        h1 {{ font-size: 22px; font-weight: 700; color: #0f172a; margin-bottom: 8px; }}
+        .subtitle {{ font-size: 14px; color: #64748b; line-height: 1.5; margin-bottom: 20px; }}
+        .email-chip {{
+            display: inline-flex; align-items: center; gap: 8px;
+            background: #f1f5f9; border-radius: 100px;
+            padding: 8px 16px; margin-bottom: 28px;
+        }}
+        .email-avatar {{
+            width: 26px; height: 26px; border-radius: 50%;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white; font-size: 12px; font-weight: 700;
+            display: flex; align-items: center; justify-content: center;
+            text-transform: uppercase;
+        }}
+        .email-text {{ font-size: 13px; font-weight: 500; color: #334155; }}
+        .progress-bar {{ height: 3px; background: #e2e8f0; border-radius: 99px; overflow: hidden; }}
+        .progress-fill {{
+            height: 100%; width: 100%;
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+            border-radius: 99px;
+            animation: drain 2s linear forwards;
+            transform-origin: left;
+        }}
+        @keyframes drain {{
+            from {{ transform: scaleX(1); }}
+            to   {{ transform: scaleX(0); }}
+        }}
+        .close-hint {{ font-size: 12px; color: #94a3b8; margin-top: 10px; }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="brand">
+            <div class="brand-dot"></div>
+            <div class="brand-dot"></div>
+            <div class="brand-dot"></div>
+            <span class="brand-name">JFCM Taytay</span>
+        </div>
+        <div class="icon-wrap">
+            <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+        </div>
+        <h1>{message}</h1>
+        <p class="subtitle">Google Drive has been linked to your account.</p>
+        <div class="email-chip">
+            <div class="email-avatar">{google_email[0]}</div>
+            <span class="email-text">{google_email}</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill"></div></div>
+        <p class="close-hint">This window will close automatically&hellip;</p>
+    </div>
+    <script>
+        if (window.opener) {{
+            window.opener.postMessage({{ type: 'google-auth-success', email: '{google_email}' }}, '*');
+        }}
+        setTimeout(() => window.close(), 2000);
+    </script>
+</body>
+</html>
         """
         return HTMLResponse(content=html_content)
     except HTTPException:
@@ -349,78 +392,116 @@ async def callback(code: str, state: str = None, db: Session = Depends(get_db)):
         db.rollback()
         # Return error HTML page
         error_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Authentication Failed</title>
-            <style>
-                body {{
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    height: 100vh;
-                    margin: 0;
-                    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-                }}
-                .error-box {{
-                    background: white;
-                    padding: 40px;
-                    border-radius: 16px;
-                    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-                    text-align: center;
-                    max-width: 400px;
-                }}
-                .error-icon {{
-                    width: 80px;
-                    height: 80px;
-                    border-radius: 50%;
-                    background: #f44336;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    margin: 0 auto 20px;
-                }}
-                .error-icon svg {{
-                    width: 50px;
-                    height: 50px;
-                    fill: white;
-                }}
-                h1 {{
-                    color: #2c3e50;
-                    margin: 0 0 10px;
-                    font-size: 24px;
-                }}
-                p {{
-                    color: #7f8c8d;
-                    margin: 0 0 20px;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="error-box">
-                <div class="error-icon">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
-                    </svg>
-                </div>
-                <h1>Authentication Failed</h1>
-                <p>{str(e)}</p>
-                <p>This window will close automatically...</p>
-            </div>
-            <script>
-                setTimeout(() => {{
-                    window.close();
-                }}, 3000);
-            </script>
-        </body>
-        </html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connection Failed — JFCM Taytay</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #fff5f5;
+        }}
+        .card {{
+            background: #fff;
+            border-radius: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.07), 0 20px 60px -10px rgba(239,68,68,0.15);
+            padding: 48px 40px 40px;
+            width: 380px;
+            text-align: center;
+            animation: slideUp 0.5s cubic-bezier(0.16,1,0.3,1);
+        }}
+        @keyframes slideUp {{
+            from {{ opacity: 0; transform: translateY(24px); }}
+            to   {{ opacity: 1; transform: translateY(0); }}
+        }}
+        .brand {{
+            display: flex; align-items: center; justify-content: center;
+            gap: 8px; margin-bottom: 32px;
+        }}
+        .brand-dot {{ width: 10px; height: 10px; border-radius: 50%; background: #6366f1; }}
+        .brand-dot:nth-child(2) {{ background: #8b5cf6; width: 7px; height: 7px; }}
+        .brand-dot:nth-child(3) {{ background: #a78bfa; width: 5px; height: 5px; }}
+        .brand-name {{ font-size: 13px; font-weight: 600; color: #6366f1; letter-spacing: 0.08em; text-transform: uppercase; }}
+        .icon-wrap {{
+            width: 88px; height: 88px; border-radius: 50%;
+            background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 24px;
+            box-shadow: 0 8px 24px rgba(239,68,68,0.3);
+            animation: popIn 0.5s 0.2s cubic-bezier(0.34,1.56,0.64,1) both;
+        }}
+        @keyframes popIn {{
+            from {{ opacity: 0; transform: scale(0.4); }}
+            to   {{ opacity: 1; transform: scale(1); }}
+        }}
+        .icon-wrap svg {{ width: 44px; height: 44px; fill: white; }}
+        h1 {{ font-size: 22px; font-weight: 700; color: #0f172a; margin-bottom: 8px; }}
+        .subtitle {{ font-size: 14px; color: #64748b; line-height: 1.5; margin-bottom: 16px; }}
+        .error-detail {{
+            background: #fef2f2; border: 1px solid #fecaca;
+            border-radius: 10px; padding: 12px 16px;
+            font-size: 12px; color: #b91c1c;
+            text-align: left; margin-bottom: 24px;
+            word-break: break-word; line-height: 1.5;
+        }}
+        .progress-bar {{ height: 3px; background: #fee2e2; border-radius: 99px; overflow: hidden; }}
+        .progress-fill {{
+            height: 100%; width: 100%;
+            background: linear-gradient(90deg, #f87171, #ef4444);
+            border-radius: 99px;
+            animation: drain 3s linear forwards;
+            transform-origin: left;
+        }}
+        @keyframes drain {{
+            from {{ transform: scaleX(1); }}
+            to   {{ transform: scaleX(0); }}
+        }}
+        .close-hint {{ font-size: 12px; color: #94a3b8; margin-top: 10px; }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="brand">
+            <div class="brand-dot"></div>
+            <div class="brand-dot"></div>
+            <div class="brand-dot"></div>
+            <span class="brand-name">JFCM Taytay</span>
+        </div>
+        <div class="icon-wrap">
+            <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </div>
+        <h1>Connection Failed</h1>
+        <p class="subtitle">Something went wrong while linking your Google account.</p>
+        <div class="error-detail">{str(e)}</div>
+        <div class="progress-bar"><div class="progress-fill"></div></div>
+        <p class="close-hint">This window will close automatically&hellip;</p>
+    </div>
+    <script>
+        setTimeout(() => window.close(), 3000);
+    </script>
+</body>
+</html>
         """
         return HTMLResponse(content=error_html, status_code=400)
 
 @router.get("/auth/status")
-async def auth_status(user_email: str = Header(..., alias="X-User-Email"), db: Session = Depends(get_db)):
-    """Check authentication status by email"""
+async def auth_status(
+    user_email: str = Header(..., alias="X-User-Email"),
+    current_user: User = Depends(get_jwt_user),
+    db: Session = Depends(get_db)
+):
+    """Check Google Drive authentication status for a given email (JWT required)"""
+    if not user_email:
+        return {"authenticated": False, "user_id": None, "email": None, "last_updated": None}
     user_cred = db.query(UserCredential).filter(
         UserCredential.email == user_email
     ).first()
@@ -565,6 +646,22 @@ async def upload_file(
                 body=permission
             ).execute()
         
+        # Save per-account folder: key = "sow1_folder_{email}"
+        per_acct_key = f"{SECTION_PREFIX}_folder_{user.email}"
+        per_acct_setting = db.query(AppSetting).filter(AppSetting.key == per_acct_key).first()
+        if per_acct_setting:
+            per_acct_setting.value = folder_id
+        else:
+            per_acct_setting = AppSetting(key=per_acct_key, value=folder_id)
+            db.add(per_acct_setting)
+        legacy = db.query(AppSetting).filter(AppSetting.key == FOLDER_SETTING_KEY).first()
+        if legacy:
+            legacy.value = folder_id
+        else:
+            legacy = AppSetting(key=FOLDER_SETTING_KEY, value=folder_id)
+            db.add(legacy)
+        db.commit()
+
         return {
             "success": True,
             "file_id": uploaded_file['id'],
@@ -605,35 +702,54 @@ async def delete_file(
 @router.get("/list-files")
 async def list_files(
     folder_id: Optional[str] = None,
-    user: UserCredential = Depends(get_current_user),  # ✅ From header
+    _jwt_user: User = Depends(get_jwt_user),  # Any logged-in user can view files
     db: Session = Depends(get_db)
 ):
-    """List files in folder"""
-    try:
-        service = get_drive_service(user.user_id, db)
-        
-        if folder_id:
-            query = f"'{folder_id}' in parents and trashed=false"
-        else:
-            query = "trashed=false"
-        
-        results = service.files().list(
-            q=query,
-            pageSize=50,
-            fields="files(id, name, mimeType, size, createdTime, webViewLink, description)"
-        ).execute()
-        
-        return {
-            "success": True,
-            "count": len(results.get('files', [])),
-            "files": results.get('files', []),
-            "user": user.email
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
+    """Merge files from ALL connected Drive accounts so every user can see everything."""
+    all_creds = db.query(UserCredential).all()
+    if not all_creds:
+        raise HTTPException(status_code=503, detail="No Google Drive account connected. An admin must connect Google Drive first.")
+
+    all_files = []
+    for cred in all_creds:
+        try:
+            acct_folder = folder_id
+            if not acct_folder:
+                per_acct = db.query(AppSetting).filter(
+                    AppSetting.key == f"{SECTION_PREFIX}_folder_{cred.email}"
+                ).first()
+                if per_acct and per_acct.value:
+                    acct_folder = per_acct.value
+                else:
+                    legacy_email = db.query(AppSetting).filter(AppSetting.key == GDRIVE_EMAIL_KEY).first()
+                    if legacy_email and legacy_email.value == cred.email:
+                        legacy_folder = db.query(AppSetting).filter(AppSetting.key == FOLDER_SETTING_KEY).first()
+                        if legacy_folder and legacy_folder.value:
+                            acct_folder = legacy_folder.value
+            if not acct_folder:
+                continue
+            # Build service only for accounts that have a folder to query
+            service = get_drive_service(cred.user_id, db)
+
+            query = f"'{acct_folder}' in parents and trashed=false"
+            results = service.files().list(
+                q=query,
+                pageSize=100,
+                fields="files(id, name, mimeType, size, createdTime, webViewLink, description)"
+            ).execute()
+            files = results.get('files', [])
+            for f in files:
+                f['_uploaded_by'] = cred.email
+            all_files.extend(files)
+        except Exception:
+            logger.warning("list-files SOW1: skipping %s — %s", cred.email, traceback.format_exc())
+            continue
+
+    return {
+        "success": True,
+        "count": len(all_files),
+        "files": all_files,
+    }
 
 # Remove email
 @router.post("/auth/remove")
@@ -648,3 +764,40 @@ async def remove_account(
     db.delete(user_cred)
     db.commit()
     return {"success": True, "message": f"User {user_email} removed"}
+
+
+# ========================================
+# FOLDER CONFIG
+# ========================================
+FOLDER_SETTING_KEY = "sow1_folder_id"
+GDRIVE_EMAIL_KEY = "sow1_gdrive_email"
+SECTION_PREFIX = "sow1"
+
+@router.get("/config")
+async def get_config(
+    _jwt_user: User = Depends(get_jwt_user),
+    db: Session = Depends(get_db)
+):
+    """Get the saved SOW1 folder ID (available to all logged-in users)"""
+    setting = db.query(AppSetting).filter(AppSetting.key == FOLDER_SETTING_KEY).first()
+    return {"folder_id": setting.value if setting else None}
+
+
+@router.post("/config")
+async def set_config(
+    folder_id: str,
+    current_user: User = Depends(get_jwt_user),
+    db: Session = Depends(get_db)
+):
+    """Save the SOW1 folder ID (admin only)"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    setting = db.query(AppSetting).filter(AppSetting.key == FOLDER_SETTING_KEY).first()
+    if setting:
+        setting.value = folder_id
+        setting.updated_at = datetime.utcnow()
+    else:
+        setting = AppSetting(key=FOLDER_SETTING_KEY, value=folder_id)
+        db.add(setting)
+    db.commit()
+    return {"success": True, "folder_id": folder_id}

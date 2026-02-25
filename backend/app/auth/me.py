@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -6,6 +7,8 @@ from jose import JWTError, jwt
 from database.deps import get_db
 from app.models.userModel import User, UserOut
 from app.auth.config import SECRET_KEY, ALGORITHM
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/auth",
