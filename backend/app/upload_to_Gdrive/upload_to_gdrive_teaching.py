@@ -12,6 +12,8 @@ import os
 import json
 import io
 import traceback
+from concurrent.futures import ThreadPoolExecutor
+from app.utils.cache import get as cache_get, set as cache_set, invalidate_prefix as cache_invalidate_prefix
 from database.deps import get_db
 from app.models.user_credentialsModel import UserCredential
 from app.models.appSettingModel import AppSetting
@@ -45,11 +47,10 @@ async def get_current_user(
     return user_cred
 
 # Path to credentials.json file
-CLIENT_SECRETS_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-    "GOOGLE_CREDENTIALS_PATH",
-    "/etc/secrets/credentials.json",
-)
+# On Render: set GOOGLE_CREDENTIALS_PATH=/etc/secrets/credentials.json
+# Locally: falls back to credentials.json next to this file
+_LOCAL_CREDENTIALS = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "credentials.json")
+CLIENT_SECRETS_FILE = os.getenv("GOOGLE_CREDENTIALS_PATH", _LOCAL_CREDENTIALS)
 
 def load_client_config():
     """Load OAuth2 client configuration from credentials.json"""
@@ -664,6 +665,7 @@ async def upload_file(
             legacy = AppSetting(key=FOLDER_SETTING_KEY, value=folder_id)
             db.add(legacy)
         db.commit()
+        cache_invalidate_prefix(f"list_files_{SECTION_PREFIX}_")
 
         return {
             "success": True,
@@ -690,6 +692,7 @@ async def delete_file(
     try:
         service = get_drive_service(user.user_id, db)
         service.files().delete(fileId=file_id).execute()
+        cache_invalidate_prefix(f"list_files_{SECTION_PREFIX}_")
         
         return {
             "success": True, 
@@ -708,53 +711,70 @@ async def list_files(
     _jwt_user: User = Depends(get_jwt_user),  # Any logged-in user can view files
     db: Session = Depends(get_db)
 ):
-    """Merge files from ALL connected Drive accounts so every user can see everything."""
+    """Merge files from ALL connected Drive accounts. Results are cached for 60 seconds."""
+    cache_key = f"list_files_{SECTION_PREFIX}_{folder_id or 'default'}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     all_creds = db.query(UserCredential).all()
     if not all_creds:
         raise HTTPException(status_code=503, detail="No Google Drive account connected. An admin must connect Google Drive first.")
 
-    all_files = []
+    # Pre-fetch folder settings and build Drive services in the main thread (DB not thread-safe)
+    tasks = []  # list of (service, acct_folder, email)
     for cred in all_creds:
+        acct_folder = folder_id  # explicit param overrides everything
+        if not acct_folder:
+            # Per-account folder key: e.g. "teaching_folder_admin@gmail.com"
+            per_acct = db.query(AppSetting).filter(
+                AppSetting.key == f"{SECTION_PREFIX}_folder_{cred.email}"
+            ).first()
+            if per_acct and per_acct.value:
+                acct_folder = per_acct.value
+            else:
+                # Legacy fallback: old single folder_id only for the account that set it
+                legacy_email = db.query(AppSetting).filter(AppSetting.key == GDRIVE_EMAIL_KEY).first()
+                if legacy_email and legacy_email.value == cred.email:
+                    legacy_folder = db.query(AppSetting).filter(AppSetting.key == FOLDER_SETTING_KEY).first()
+                    if legacy_folder and legacy_folder.value:
+                        acct_folder = legacy_folder.value
+        if not acct_folder:
+            continue  # Skip accounts with no configured folder
         try:
             service = get_drive_service(cred.user_id, db)
-            # Determine folder for this account
-            acct_folder = folder_id  # explicit param overrides everything
-            if not acct_folder:
-                # Per-account folder key: e.g. "teaching_folder_admin@gmail.com"
-                per_acct = db.query(AppSetting).filter(
-                    AppSetting.key == f"{SECTION_PREFIX}_folder_{cred.email}"
-                ).first()
-                if per_acct and per_acct.value:
-                    acct_folder = per_acct.value
-                else:
-                    # Legacy fallback: old single folder_id only for the account that set it
-                    legacy_email = db.query(AppSetting).filter(AppSetting.key == GDRIVE_EMAIL_KEY).first()
-                    if legacy_email and legacy_email.value == cred.email:
-                        legacy_folder = db.query(AppSetting).filter(AppSetting.key == FOLDER_SETTING_KEY).first()
-                        if legacy_folder and legacy_folder.value:
-                            acct_folder = legacy_folder.value
-            if not acct_folder:
-                continue  # Skip accounts with no configured folder
+            tasks.append((service, acct_folder, cred.email))
+        except Exception:
+            logger.warning("list-files teaching: cannot get service for %s — %s", cred.email, traceback.format_exc())
 
-            query = f"'{acct_folder}' in parents and trashed=false"
+    def _fetch(service, acct_folder, email):
+        try:
             results = service.files().list(
-                q=query,
+                q=f"'{acct_folder}' in parents and trashed=false",
                 pageSize=100,
                 fields="files(id, name, mimeType, size, createdTime, webViewLink, description)"
             ).execute()
             files = results.get('files', [])
             for f in files:
-                f['_uploaded_by'] = cred.email  # tag source account for delete ops
-            all_files.extend(files)
+                f['_uploaded_by'] = email  # tag source account for delete ops
+            return files
         except Exception:
-            logger.warning("list-files teaching: skipping %s — %s", cred.email, traceback.format_exc())
-            continue
+            logger.warning("list-files teaching: GDrive error for %s — %s", email, traceback.format_exc())
+            return []
 
-    return {
+    all_files = []
+    if tasks:
+        with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+            for files in executor.map(lambda t: _fetch(*t), tasks):
+                all_files.extend(files)
+
+    response = {
         "success": True,
         "count": len(all_files),
         "files": all_files,
     }
+    cache_set(cache_key, response, ttl=60)
+    return response
 
 # Remove email
 @router.post("/auth/remove")
