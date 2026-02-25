@@ -89,12 +89,16 @@ function updateProfileUI(user) {
     emailValue.textContent = user.email;
   }
   
-  // Update member since (if created_at exists)
+  // Update member since
   const memberSinceValue = document.getElementById('profile-member-since-value');
-  if (memberSinceValue && user.created_at) {
-    const date = new Date(user.created_at);
-    const monthYear = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    memberSinceValue.textContent = monthYear;
+  if (memberSinceValue) {
+    if (user.created_at) {
+      const date = new Date(user.created_at);
+      const monthYear = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      memberSinceValue.textContent = monthYear;
+    } else {
+      memberSinceValue.textContent = '—';
+    }
   }
   
   // Update sidebar user info
