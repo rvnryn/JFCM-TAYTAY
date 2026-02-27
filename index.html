@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JFCM Taytay</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;500;600;700&family=Poppins:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/png" href="./images/logo_green.png" />
+    <link rel="shortcut icon" href="./images/logo_green.png" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <!--Navigation Bar-->
+      <nav class="navbar">
+        <div class="logo">
+          <img src="images/logo_white.png" alt="JFCM Taytay Logo" />
+        </div>
+
+        <button class="nav-hamburger" id="nav-hamburger" aria-label="Toggle menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+
+        <div class="nav-menu" id="nav-menu">
+          <ul class="nav-links">
+            <!-- <li>
+              <a href="https://form.jotform.com/jfcmbinan/frontdesk" 
+                >Front Desk</a
+              >
+            </li> -->
+            <li><a href="https://www.facebook.com/jfcm.taytay">Contact Us</a></li>
+            <!--<li><a href="#">Calendar</a></li>-->
+            <li class="has-dropdown">
+              <button class="dropdown-toggle">
+                Himig Pagsamba<span class="arrow"></span>
+              </button>
+
+              <ul class="dropdown-menu">
+                <li>
+                  <a href="https://www.youtube.com/live/0JSu7UbqhwQ"
+                    >Launching Video</a
+                  >
+                </li>
+                <li>
+                  <a
+                    href="https://www.youtube.com/playlist?list=PLOw7y2edlmENgxEJeK3EPMWp12hpS4vDx"
+                    >Youtube Playlist</a
+                  >
+                </li>
+                <li>
+                  <a href="https://open.spotify.com/artist/4eRxYQLHoMLWonGnWRBmCA"
+                    >Spotify Album</a
+                  >
+                </li>
+              </ul>
+            </li>
+            <li><a href="https://jfcmkitchen.com/">JFCM Kitchen</a></li>
+          </ul>
+
+          <div class="nav-right">
+            <a href="login/login.html" class="login">Log In</a>
+          </div>
+        </div>
+      </nav>
+    </header>
+
+    <!--Hero Section-->
+
+    <section class="hero">
+      <div class="hero-overlay"></div>
+
+      <div class="hero-content">
+        <h1>JFCM TAYTAY</h1>
+        <p>To Win. To Train. To Send.</p>
+      </div>
+    </section>
+
+    <!--Who We Are-->
+
+    <section class="who-we-are">
+      <div class="who-we-are-wrapped">
+        <h2 class="who-we-are-title">WHO WE ARE</h2>
+
+        <p class="who-we-are-intro">
+          The Jesus First Christian Ministries, Inc. (JFCM) is a church-planting
+          ministry founded in June 1987 in the Middle East.
+        </p>
+
+        <p class="who-we-are-description">
+          It was registered with the Philippine Exchange Commission on May 31,
+          1989 as a non-denominational, non-profit, religious Christian
+          organization. It is authorized to plant churches, build schools and
+          engage in missions and civic activities that seek to promote the
+          general well-being of man.
+        </p>
+      </div>
+
+      <img
+        src="images/logo_who_we_are.jpg"
+        class="who-we-are-image"
+        alt="Who We Are"
+      />
+    </section>
+
+    <!--Why We Exist-->
+
+    <section class="why-we-exist">
+      <div class="why-we-exist-wrapped">
+        <img
+          src="images/logo_why_we_exist.jpg"
+          class="why-we-exist-image"
+          alt="Why We Exist"
+        />
+
+        <div class="why-we-exist-text">
+          <h2 class="why-we-exist-title">WHY WE EXIST</h2>
+
+          <p class="why-we-exist-description">
+            The Jesus First Christian Ministries exists to glorify God. This, it
+            seeks to do by bringing people to Christ; by training them unto
+            spiritual maturity; by equipping them to do ministry and mission;
+            and by enabling them to fulfill their calling in life.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!--Slideshow-->
+
+    <section class="slideshow">
+      <div class="slide">
+        <img id="slide-image" src="images/slide1.jpg" alt="Slide Image" />
+
+        <!-- dark overlay -->
+        <div class="slide-overlay"></div>
+
+        <!-- text on image -->
+        <p id="slide-text" class="slide-text">
+          We win people to the Lord Jesus Christ through the ministry of
+          evangelism and church planting.
+        </p>
+
+        <!-- buttons INSIDE image -->
+        <button class="previous" onclick="prevSlide()">&#10094;</button>
+        <button class="next" onclick="nextSlide()">&#10095;</button>
+      </div>
+    </section>
+
+    <!-- Beliefs section -->
+
+    <section class="beliefs">
+      <h2 class="beliefs-title">STATEMENT OF FAITH</h2>
+
+      <div class="beliefs-grid">
+        <div class="belief-card">
+          <span class="belief-number">1</span>
+          <p>
+            We believe that the BIBLE is the infallible Word of God and the
+            absolute authority in matters of faith and conduct.
+          </p>
+        </div>
+
+        <div class="belief-card">
+          <span class="belief-number">2</span>
+          <p>
+            We believe that God eternally exists in three distinct persons of
+            the Father, the Son, and the Holy Spirit.
+          </p>
+        </div>
+
+        <div class="belief-card">
+          <span class="belief-number">3</span>
+          <p>
+            We believe that the Lord Jesus Christ is the Incarnate Word who was
+            conceived by the Holy Spirit, born of Mary who was a virgin, and who
+            died sacrificially for our sins. He was buried, resurrected bodily
+            on the third day, ascended into heaven, and will come again to judge
+            the living and the dead.
+          </p>
+        </div>
+
+        <div class="belief-card">
+          <span class="belief-number">4</span>
+          <p>
+            We believe that all men have sinned against God and that they are
+            saved solely by grace through faith in the Lord Jesus Christ and His
+            redemptive work.
+          </p>
+        </div>
+
+        <div class="belief-card">
+          <span class="belief-number">5</span>
+          <p>
+            We believe that the Holy Spirit is the eternal Spirit of God sent to
+            the church to empower it to live a holy life and to witness to the
+            whole world.
+          </p>
+        </div>
+
+        <div class="belief-card">
+          <span class="belief-number">6</span>
+          <p>
+            We believe that there is only one church, the Body of Christ, with
+            the Lord Jesus Christ as its head, and that all believers in every
+            generation belong to it.
+          </p>
+        </div>
+
+        <div class="belief-card">
+          <span class="belief-number">7</span>
+          <p>
+            We believe that the church is tasked by God to preach the gospel to
+            all nations. This it can accomplish by planting churches and
+            supporting mission through tithes and offerings.
+          </p>
+        </div>
+
+        <div class="belief-card">
+          <span class="belief-number">8</span>
+          <p>
+            We believe in the rapture of the saints, the second coming of
+            Christ, the resurrection of the body, the judgment of believers, the
+            judgment of non-believers, and in life everlasting.
+          </p>
+        </div>
+
+        <div class="belief-card">
+          <span class="belief-number">9</span>
+          <p>
+            We believe in the ordinances of Water Baptism and the Breaking of
+            Bread.
+          </p>
+        </div>
+
+        <div class="belief-card">
+          <span class="belief-number">10</span>
+          <p>
+            We believe in the sanctity of marriage — that it is biblical,
+            singular, and exclusively between man and woman.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+
+    <footer class="footer">
+      <div class="footer-main">
+        <div class="footer-logo">
+          <img src="images/logo_green.png" alt="JFCM Taytay Logo" />
+        </div>
+
+        <div class="footer-info">
+          <h3>JESUS FIRST CHRISTIAN MINISTRIES</h3>
+          <p>TAYTAY, RIZAL</p>
+
+          <a
+            href="https://www.facebook.com/jfcm.taytay"
+            class="footer-facebook"
+            target="_blank"
+            aria-label="JFCM Taytay Facebook"
+          >
+            <img src="images/facebook-icon.svg" alt="Facebook" />
+          </a>
+        </div>
+      </div>
+
+      <div class="footer-bottom">© 2026 JFCM TAYTAY. All rights reserved.</div>
+    </footer>
+
+    <!-- Scroll to Top Button -->
+    <button id="scroll-to-top" aria-label="Scroll to top">&#8679;</button>
+
+    <script src="script.js"></script>
+  </body>
+</html>
