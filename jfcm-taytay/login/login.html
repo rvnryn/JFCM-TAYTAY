@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JFCM Taytay</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;500;600;700&family=Poppins:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="login.css" />
+    <link rel="icon" type="image/png" href="../images/logo_green.png" />
+    <link rel="shortcut icon" href="../images/logo_green.png" />
+  </head>
+  <body>
+    <div class="login-page">
+      <img
+        src="../images/login_background.jpg"
+        alt="Background"
+        class="login-bg"
+      />
+      <div class="login-card">
+        <div class="login-left">
+          <img src="../images/jfcm_white.png" alt="JFCM Logo" />
+        </div>
+
+        <div class="login-right">
+          <a href="../index.html" class="back-link">← Back to Main Page</a>
+          <h2>Login into account</h2>
+
+          <label>Username or Email</label>
+          <input type="text" id="identifier" />
+
+          <label>Password</label>
+          <input type="password" id="password" />
+
+          <button id="login-btn" class="login-btn">Login</button>
+          <div id="login-error" class="login-error"></div>
+          <div id="login-modal" class="modal">
+            <div class="modal-content" id="login-modal-content">
+              <span class="close" id="modal-close">&times;</span>
+              <div id="modal-icon"></div>
+              <div id="modal-message"></div>
+            </div>
+          </div>
+
+          <p class="copyright">© 2026 JFCM TAYTAY. All rights reserved.</p>
+        </div>
+      </div>
+    </div>
+
+    <script src="../config.js"></script>
+    <script src="login.js"></script>
+  </body>
+</html>
