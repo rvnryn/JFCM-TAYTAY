@@ -79,10 +79,15 @@ document
       if (response.ok) {
         const data = await response.json();
         localStorage.setItem("access_token", data.access_token);
-        showModal("Logged in successfully!");
+        btn.style.background = "#2e7d32";
+        btn.style.boxShadow = "0 4px 14px rgba(46, 125, 50, 0.4)";
+        btnText.textContent = "✓ Login Successful";
+        statusDiv.style.display = "flex";
+        statusDiv.style.color = "#2e7d32";
+        statusDiv.textContent = "Redirecting to dashboard...";
         setTimeout(() => {
           window.location.href = "../dashboard/dashboard.html";
-        }, 1200);
+        }, 1500);
       } else {
         const error = await response.json().catch(() => ({}));
         showError(error.detail || "Login failed. Please check your credentials.");
