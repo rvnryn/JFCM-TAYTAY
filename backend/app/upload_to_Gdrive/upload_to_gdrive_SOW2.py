@@ -73,21 +73,10 @@ SCOPES = ['https://www.googleapis.com/auth/drive',
     'openid']
 
 def get_redirect_uri():
-    """Get redirect URI from credentials.json"""
-    config = load_client_config()
-    
-    if "web" in config:
-        redirect_uris = config["web"].get("redirect_uris", [])
-    elif "installed" in config:
-        redirect_uris = config["installed"].get("redirect_uris", [])
-    else:
-        return "http://localhost:8000/gdrive/sow2/auth/callback"
-    
-    for uri in redirect_uris:
-        if "localhost" in uri or "127.0.0.1" in uri:
-            return uri
-    
-    return redirect_uris[0] if redirect_uris else "http://localhost:8000/gdrive/sow2/auth/callback"
+    """Get redirect URI based on environment"""
+    import os
+    base_url = os.environ.get("BACKEND_URL", "http://localhost:8000").rstrip("/")
+    return f"{base_url}/gdrive/sow2/auth/callback"
 
 REDIRECT_URI = get_redirect_uri()
 
