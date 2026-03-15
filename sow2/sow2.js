@@ -237,9 +237,7 @@ function updateConnectedGoogleAccountUI() {
 
 document.body.addEventListener("click", function (e) {
   if (e.target && e.target.id === "switchGoogleAccountBtn") {
-    // Clear all stored email keys so the new account becomes the active one
-    localStorage.removeItem("gdrive_user_email_sow2");
-    localStorage.removeItem("gdrive_user_email");
+    // Keep current account unless OAuth succeeds
     sessionStorage.removeItem("googleAuthCompletedSow2");
     initiateGoogleAuthInModal();
   }
@@ -589,6 +587,20 @@ async function showAllConnectedAccounts() {
       .custom-modal .secondary-btn:hover {
         background: #c7d0ff;
       }
+      .custom-modal .danger-btn {
+        background: #f44336;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 7px 22px;
+        font-weight: 500;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .custom-modal .danger-btn:hover {
+        background: #d32f2f;
+      }
       @keyframes modalPopIn {
         from { transform: scale(0.95) translateY(30px); opacity: 0; }
         to { transform: scale(1) translateY(0); opacity: 1; }
@@ -660,17 +672,64 @@ async function showAllConnectedAccounts() {
     document.querySelectorAll(".switch-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
         localStorage.setItem("gdrive_user_email_sow2", btn.dataset.email);
+        localStorage.setItem("gdrive_user_email", btn.dataset.email);
         showToast("Switched account!", "success");
         setTimeout(() => window.location.reload(), 600);
       });
     });
     // Remove logic
-    document.querySelectorAll(".remove-btn").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        if (!confirm(`Remove account ${btn.dataset.email}?`)) return;
+    function showRemoveAccountModal(email) {
+      const existing = document.getElementById("removeAccountModal");
+      if (existing) existing.remove();
+      const modalHtml = `
+      <div class="custom-modal-overlay" id="removeAccountModal">
+        <div class="custom-modal">
+          <div class="modal-header">
+            <h3>Remove Google Drive Account</h3>
+          </div>
+          <div class="modal-body">
+            <p>Are you sure you want to remove <b>${escapeHtml(email)}</b> from connected Google Drive accounts?</p>
+          </div>
+          <div class="modal-footer">
+            <button class="secondary-btn" id="cancelRemoveAccountBtn">Cancel</button>
+            <button class="danger-btn" id="confirmRemoveAccountBtn">Remove</button>
+          </div>
+        </div>
+      </div>
+      `;
+      document.body.insertAdjacentHTML("beforeend", modalHtml);
+      const rmOverlay = document.getElementById("removeAccountModal");
+      document.getElementById("cancelRemoveAccountBtn").onclick = () => rmOverlay.remove();
+      rmOverlay.addEventListener("click", (e) => { if (e.target === rmOverlay) rmOverlay.remove(); });
+      document.getElementById("confirmRemoveAccountBtn").onclick = async () => {
+        rmOverlay.remove();
         try {
-          const resp = await fetch(`${window.API_BASE_URL}/gdrive/sow2/auth/remove`, { method: "POST", headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}`, "X-User-Email": btn.dataset.email } });
+          const resp = await fetch(`${window.API_BASE_URL}/gdrive/sow2/auth/remove`, { method: "POST", headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}`, "X-User-Email": email } });
           if (resp.ok) {
+            const localKeys = [
+              "gdrive_user_email",
+              "gdrive_user_email_sow1",
+              "gdrive_user_email_sow2",
+            ];
+            const wasCurrent = localKeys.some(
+              (key) => (localStorage.getItem(key) || "") === email,
+            );
+            localKeys.forEach((key) => {
+              if ((localStorage.getItem(key) || "") === email) {
+                localStorage.removeItem(key);
+              }
+            });
+
+            allConnectedGoogleAccounts = allConnectedGoogleAccounts.filter(
+              (acc) => acc.email !== email,
+            );
+
+            if (wasCurrent && allConnectedGoogleAccounts.length > 0) {
+              const fallbackEmail = allConnectedGoogleAccounts[0].email;
+              localStorage.setItem("gdrive_user_email_sow2", fallbackEmail);
+              localStorage.setItem("gdrive_user_email", fallbackEmail);
+            }
+
             showToast("Account removed.", "success");
             closeModal();
             setTimeout(() => window.location.reload(), 600);
@@ -680,7 +739,10 @@ async function showAllConnectedAccounts() {
         } catch {
           showToast("Failed to remove account.", "error");
         }
-      });
+      };
+    }
+    document.querySelectorAll(".remove-btn").forEach((btn) => {
+      btn.addEventListener("click", () => showRemoveAccountModal(btn.dataset.email));
     });
   } catch (e) {
     showToast("Error showing accounts.", "error");
@@ -713,6 +775,7 @@ function pickerCallback(data) {
     const folder = data.docs[0];
     selectedFolder = { id: folder.id, name: folder.name };
     setSow2FolderId(folder.id); // Save selected folder for future loads
+    localStorage.setItem("sow2_folder_name", folder.name);
     document.getElementById("selectedFolderName").textContent = folder.name;
     updateUploadButtonState();
     loadSow2Files(); // Reload file list for new folder
@@ -780,23 +843,25 @@ function clearSelectedFile() {
 
 // Upload file from modal (copied and adapted from teachings.js)
 async function uploadFromModal() {
+  const confirmBtn = document.getElementById("confirmUploadBtn");
+  const originalContent = confirmBtn ? confirmBtn.innerHTML : "";
+
   try {
     const titleInput = document.getElementById("sow2Title");
-    const confirmBtn = document.getElementById("confirmUploadBtn");
-    if (confirmBtn) confirmBtn.disabled = true;
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+    }
     if (!selectedFile) {
       showToast("Please select a file to upload.", "warning");
-      if (confirmBtn) confirmBtn.disabled = false;
       return;
     }
     if (!selectedFolder) {
       showToast("Please select a Google Drive folder.", "warning");
-      if (confirmBtn) confirmBtn.disabled = false;
       return;
     }
     if (!titleInput.value.trim()) {
       showToast("Please enter a title.", "warning");
-      if (confirmBtn) confirmBtn.disabled = false;
       return;
     }
     const formData = new FormData();
@@ -820,7 +885,6 @@ async function uploadFromModal() {
     if (!response.ok) {
       let errorText = await response.text();
       showToast("Upload failed: " + errorText, "error");
-      if (confirmBtn) confirmBtn.disabled = false;
       return;
     }
     showToast("File uploaded successfully!", "success");
@@ -830,8 +894,12 @@ async function uploadFromModal() {
     await loadSow2Files();
   } catch (error) {
     showToast("Upload failed. Please try again.", "error");
-    if (confirmBtn) confirmBtn.disabled = false;
     console.error("uploadFromModal error:", error);
+  } finally {
+    if (confirmBtn) {
+      confirmBtn.innerHTML = originalContent;
+      updateUploadButtonState();
+    }
   }
 }
 
@@ -1215,6 +1283,15 @@ async function openUploadModal() {
   );
   // Check Google Drive authentication and show appropriate section
   await checkAndShowGdriveSection();
+  // Restore last used folder so the user doesn't have to re-pick every time
+  const _lastFolderId = getSow2FolderId();
+  const _lastFolderName = localStorage.getItem("sow2_folder_name");
+  if (_lastFolderId && _lastFolderName) {
+    selectedFolder = { id: _lastFolderId, name: _lastFolderName };
+    const _folderNameEl = document.getElementById("selectedFolderName");
+    if (_folderNameEl) _folderNameEl.textContent = _lastFolderName;
+    updateUploadButtonState();
+  }
   // Show success toast if just authenticated
   if (sessionStorage.getItem("showAuthSuccess") === "true") {
     sessionStorage.removeItem("showAuthSuccess");
@@ -1272,7 +1349,7 @@ function showCustomConfirm(title, message, onConfirm, onCancel = null) {
       .confirm-header{padding:24px 24px 16px;border-bottom:1px solid #e2e8f0}
       .confirm-header h3{margin:0;font-size:1.25rem;font-weight:600;color:#1e293b}
       .confirm-body{padding:20px 24px}
-      .confirm-body p{margin:0;font-size:.95rem;color:#64748b;line-height:1.6}
+      .confirm-body p{margin:0;font-size:.95rem;color:#64748b;line-height:1.6;white-space:pre-line}
       .confirm-footer{padding:16px 24px;display:flex;gap:12px;justify-content:flex-end;border-top:1px solid #e2e8f0}
       .confirm-btn{padding:10px 24px;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;transition:all .2s ease}
       .confirm-btn.cancel{background:#f1f5f9;color:#475569}
@@ -1308,9 +1385,29 @@ async function deleteSow2File(fileId) {
     return;
   }
 
+  const fileTitle = fileObj?.title || fileObj?.category || fileObj?.name || "Unknown file";
+  const fileTopic = fileObj?.topic || fileObj?.category || "N/A";
+  const fileType = getFileTypeLabel(fileObj?.mimeType || fileObj?.mime_type || "");
+  const uploadedBy = fileOwner || "Unknown";
+  const uploadedDate = fileObj?.createdTime ? formatDate(fileObj.createdTime) : "Unknown";
+  const deleteMessage =
+    "Are you sure you want to delete this SOW 2 file? This action cannot be undone." +
+    "\n\n" +
+    `Title: ${fileTitle}` +
+    "\n" +
+    `Topic: ${fileTopic}` +
+    "\n" +
+    `Type: ${fileType}` +
+    "\n" +
+    `Uploaded by: ${uploadedBy}` +
+    "\n" +
+    `Uploaded date: ${uploadedDate}` +
+    "\n" +
+    `File ID: ${fileId}`;
+
   showCustomConfirm(
     "Delete SOW 2 file?",
-    "Are you sure you want to delete this SOW 2 file? This action cannot be undone.",
+    deleteMessage,
     async () => {
       try {
         const response = await fetch(
@@ -1815,8 +1912,10 @@ async function initiateGoogleAuthInModal() {
         "Google Authentication",
         "width=600,height=700,left=100,top=100",
       );
+      let authSucceeded = false;
       const messageHandler = (event) => {
         if (event.data && event.data.type === "google-auth-success") {
+          authSucceeded = true;
           window.removeEventListener("message", messageHandler);
           sessionStorage.setItem("googleAuthCompletedSow2", "true");
           window.location.reload();
@@ -1827,9 +1926,8 @@ async function initiateGoogleAuthInModal() {
         if (authWindow && authWindow.closed) {
           clearInterval(checkWindowClosed);
           window.removeEventListener("message", messageHandler);
-          if (sessionStorage.getItem("googleAuthCompletedSow2") !== "true") {
-            sessionStorage.setItem("googleAuthCompletedSow2", "true");
-            window.location.reload();
+          if (!authSucceeded) {
+            showToast("Google sign-in canceled. Keeping your current connected account.", "info");
           }
         }
       }, 1000);
@@ -2014,7 +2112,7 @@ function showSkeletonGrid(count = 6) {
 async function loadSow2Files() {
   try {
     // Show cached data instantly, refresh in background (stale-while-revalidate)
-    const cached = localStorage.getItem('cache_sow2_files');
+    const cached = localStorage.getItem('cache_sow2_files_scoped');
     if (cached) {
       try {
         allSow2Files = JSON.parse(cached);
@@ -2025,7 +2123,7 @@ async function loadSow2Files() {
       showSkeletonGrid(6);
     }
 
-    // Backend merges files from ALL connected Drive accounts — no folder_id needed
+    // Backend lists all JFCM-uploaded files (matching 'Title:' description) across connected Drive accounts
     const _ctrl = new AbortController();
     const _tid = setTimeout(() => _ctrl.abort(), 20000);
     const response = await fetch(`${window.API_BASE_URL}/gdrive/sow2/list-files`, {
@@ -2037,28 +2135,30 @@ async function loadSow2Files() {
     clearTimeout(_tid);
     if (response.status === 503) {
       const contentList = document.querySelector(".content-list");
-      if (contentList) contentList.innerHTML = `<div class="empty-state"><i class="fas fa-inbox empty-icon"></i><p>No SOW2 folder configured yet. An admin needs to upload a file first.</p></div>`;
+      if (contentList) contentList.innerHTML = `<div class="empty-state"><i class="fas fa-inbox empty-icon"></i><p>No Google Drive account connected. An admin needs to connect Google Drive first.</p></div>`;
       return;
     }
     if (!response.ok) {
       throw new Error("Network response was not ok");
     }
     const data = await response.json();
-    // Parse title and topic from description for each file, match Teachings logic
-    allSow2Files = (data.files || []).map(file => {
-      if (file.description) {
-        const parsed = parseTitleAndTopicFromDescription(file.description);
-        if (parsed.title) file.title = parsed.title;
-        if (parsed.topic) {
-          file.topic = parsed.topic;
-        } else {
-          file.topic = file.topic || "";
+    // Filter out folders and parse title/topic metadata for each file
+    allSow2Files = (data.files || [])
+      .filter((file) => file.mimeType !== "application/vnd.google-apps.folder")
+      .map(file => {
+        if (file.description) {
+          const parsed = parseTitleAndTopicFromDescription(file.description);
+          if (parsed.title) file.title = parsed.title;
+          if (parsed.topic) {
+            file.topic = parsed.topic;
+          } else {
+            file.topic = file.topic || "";
+          }
         }
-      }
-      return file;
-    });
+        return file;
+      });
     // Cache for instant display on next load
-    try { localStorage.setItem('cache_sow2_files', JSON.stringify(allSow2Files)); } catch(e) {}
+    try { localStorage.setItem('cache_sow2_files_scoped', JSON.stringify(allSow2Files)); } catch(e) {}
     populateTopicFilter();
     applyFiltersAndDisplay();
   } catch (error) {

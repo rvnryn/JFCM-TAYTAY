@@ -653,6 +653,12 @@ async def upload_file(
         else:
             legacy = AppSetting(key=FOLDER_SETTING_KEY, value=folder_id)
             db.add(legacy)
+        legacy_email = db.query(AppSetting).filter(AppSetting.key == GDRIVE_EMAIL_KEY).first()
+        if legacy_email:
+            legacy_email.value = user.email
+        else:
+            legacy_email = AppSetting(key=GDRIVE_EMAIL_KEY, value=user.email)
+            db.add(legacy_email)
         db.commit()
         cache_invalidate_prefix(f"list_files_{SECTION_PREFIX}_")
 
@@ -697,53 +703,70 @@ async def delete_file(
 @router.get("/list-files")
 async def list_files(
     folder_id: Optional[str] = None,
+    user_email: Optional[str] = Header(None, alias="X-User-Email"),
     _jwt_user: User = Depends(get_jwt_user),  # Any logged-in user can view files
     db: Session = Depends(get_db)
 ):
-    """Merge files from ALL connected Drive accounts. Results are cached for 60 seconds."""
-    cache_key = f"list_files_{SECTION_PREFIX}_{folder_id or 'default'}"
+    """List files for a specific account or merge files from configured folders across connected accounts."""
+    cache_scope = user_email or folder_id or 'all'
+    cache_key = f"list_files_{SECTION_PREFIX}_{cache_scope}"
     cached = cache_get(cache_key)
     if cached is not None:
         return cached
+
+    if user_email:
+        user_cred = db.query(UserCredential).filter(UserCredential.email == user_email).first()
+        if not user_cred:
+            raise HTTPException(status_code=404, detail=f"Google Drive account {user_email} not found")
+
+        try:
+            service = get_drive_service(user_cred.user_id, db)
+            results = service.files().list(
+                q="trashed=false",
+                pageSize=100,
+                fields="files(id, name, mimeType, size, createdTime, webViewLink, description)"
+            ).execute()
+            files = results.get('files', [])
+            for file in files:
+                file['_uploaded_by'] = user_email
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to load Google Drive files: {str(exc)}")
+
+        response = {
+            "success": True,
+            "count": len(files),
+            "files": files,
+        }
+        cache_set(cache_key, response, ttl=60)
+        return response
 
     all_creds = db.query(UserCredential).all()
     if not all_creds:
         raise HTTPException(status_code=503, detail="No Google Drive account connected. An admin must connect Google Drive first.")
 
-    # Pre-fetch folder settings and build Drive services in the main thread (DB not thread-safe)
-    tasks = []  # list of (service, acct_folder, email)
+    # Build Drive services in the main thread (DB sessions are not thread-safe)
+    tasks = []  # list of (service, email)
     for cred in all_creds:
-        acct_folder = folder_id  # explicit param overrides everything
-        if not acct_folder:
-            # Per-account folder key: e.g. "teaching_folder_admin@gmail.com"
-            per_acct = db.query(AppSetting).filter(
-                AppSetting.key == f"{SECTION_PREFIX}_folder_{cred.email}"
-            ).first()
-            if per_acct and per_acct.value:
-                acct_folder = per_acct.value
-            else:
-                # Legacy fallback: old single folder_id only for the account that set it
-                legacy_email = db.query(AppSetting).filter(AppSetting.key == GDRIVE_EMAIL_KEY).first()
-                if legacy_email and legacy_email.value == cred.email:
-                    legacy_folder = db.query(AppSetting).filter(AppSetting.key == FOLDER_SETTING_KEY).first()
-                    if legacy_folder and legacy_folder.value:
-                        acct_folder = legacy_folder.value
-        if not acct_folder:
-            continue  # Skip accounts with no configured folder
         try:
             service = get_drive_service(cred.user_id, db)
-            tasks.append((service, acct_folder, cred.email))
+            tasks.append((service, cred.email))
         except Exception:
             logger.warning("list-files teaching: cannot get service for %s — %s", cred.email, traceback.format_exc())
 
-    def _fetch(service, acct_folder, email):
+    def _fetch(service, email):
         try:
             results = service.files().list(
-                q=f"'{acct_folder}' in parents and trashed=false",
-                pageSize=100,
+                q="trashed=false",
+                pageSize=200,
                 fields="files(id, name, mimeType, size, createdTime, webViewLink, description)"
             ).execute()
-            files = results.get('files', [])
+            # Only return files uploaded through this app (they always have 'Title:' in description)
+            files = [
+                f for f in results.get('files', [])
+                if f.get('description') and 'Title:' in f['description']
+            ]
             for f in files:
                 f['_uploaded_by'] = email  # tag source account for delete ops
             return files
@@ -776,7 +799,17 @@ async def remove_account(
     if not user_cred:
         raise HTTPException(status_code=404, detail=f"User {user_email} not found")
     db.delete(user_cred)
+    # Clean up orphaned per-account folder setting
+    per_acct_key = f"{SECTION_PREFIX}_folder_{user_email}"
+    orphan = db.query(AppSetting).filter(AppSetting.key == per_acct_key).first()
+    if orphan:
+        db.delete(orphan)
+    # If this was the legacy email owner, clear that too
+    legacy_email_setting = db.query(AppSetting).filter(AppSetting.key == GDRIVE_EMAIL_KEY).first()
+    if legacy_email_setting and legacy_email_setting.value == user_email:
+        db.delete(legacy_email_setting)
     db.commit()
+    cache_invalidate_prefix(f"list_files_{SECTION_PREFIX}_")
     return {"success": True, "message": f"User {user_email} removed"}
 
 
