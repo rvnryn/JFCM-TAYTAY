@@ -29,6 +29,29 @@ function getFileIcon(mimeType) {
   if (mimeType.startsWith("application/vnd.openxmlformats-officedocument.presentationml.presentation") || mimeType.startsWith("application/vnd.ms-powerpoint")) return "fas fa-file-powerpoint";
   return "fas fa-file";
 }
+
+function getFileTypeLabel(mimeType) {
+  if (!mimeType) return "FILE";
+  const map = {
+    "application/pdf": "PDF",
+    "application/msword": "DOC",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
+    "application/vnd.ms-excel": "XLS",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "XLSX",
+    "application/vnd.ms-powerpoint": "PPT",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "PPTX",
+    "text/plain": "TXT",
+    "text/csv": "CSV",
+    "application/zip": "ZIP",
+    "application/x-zip-compressed": "ZIP",
+    "video/mp4": "MP4",
+    "video/webm": "WEBM",
+    "audio/mpeg": "MP3",
+    "image/jpeg": "JPG",
+    "image/png": "PNG",
+  };
+  return map[mimeType] || mimeType.split("/").pop().split(".").pop().toUpperCase().slice(0, 8) || "FILE";
+}
 // ===================================
 // TOAST NOTIFICATIONS & CUSTOM MODALS
 // ===================================
@@ -1373,17 +1396,10 @@ function showCustomConfirm(title, message, onConfirm, onCancel = null) {
 
 async function deleteSow2File(fileId) {
   const userEmail = getCurrentUserEmail();
-
-  // Check if the file belongs to a different Google Drive account
   const fileObj = allSow2Files.find(f => f.id === fileId);
   const fileOwner = fileObj?._uploaded_by || "";
-  if (fileOwner && userEmail && fileOwner !== userEmail) {
-    showToast(
-      `This file belongs to ${fileOwner}. Switch to that Google Drive account to delete it.`,
-      "warning"
-    );
-    return;
-  }
+  // Use the file's owning account for the delete request; fall back to current active account
+  const deleteEmail = fileOwner || userEmail;
 
   const fileTitle = fileObj?.title || fileObj?.category || fileObj?.name || "Unknown file";
   const fileTopic = fileObj?.topic || fileObj?.category || "N/A";
@@ -1415,7 +1431,7 @@ async function deleteSow2File(fileId) {
           {
             method: "DELETE",
             headers: {
-              "X-User-Email": userEmail,
+              "X-User-Email": deleteEmail,
               Authorization: `Bearer ${localStorage.getItem("access_token")}`,
             },
           },

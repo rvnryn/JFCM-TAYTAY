@@ -1871,19 +1871,12 @@ function displayEmptyState(message = "No teachings available") {
 
 async function deleteTeaching(fileId) {
   const userEmail = getCurrentUserEmail();
-  if (!userEmail) {
-    showCustomAlert("You must connect a Google Drive account before deleting files.", "error");
-    return;
-  }
-
-  // Check if the file belongs to a different Google Drive account
   const fileObj = allTeachings.find(t => t.id === fileId);
   const fileOwner = fileObj?._uploaded_by || "";
-  if (fileOwner && fileOwner !== userEmail) {
-    showToast(
-      `This file belongs to ${fileOwner}. Switch to that Google Drive account to delete it.`,
-      "warning"
-    );
+  // Use the file's owning account for the delete request; fall back to current active account
+  const deleteEmail = fileOwner || userEmail;
+  if (!deleteEmail) {
+    showCustomAlert("You must connect a Google Drive account before deleting files.", "error");
     return;
   }
 
@@ -1917,7 +1910,7 @@ async function deleteTeaching(fileId) {
           {
             method: "DELETE",
             headers: {
-              "X-User-Email": userEmail,
+              "X-User-Email": deleteEmail,
               Authorization: `Bearer ${localStorage.getItem("access_token")}`,
             },
           },

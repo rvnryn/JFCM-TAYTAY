@@ -615,7 +615,7 @@ async def upload_file(
         file_metadata = {
             'name': file.filename,
             'parents': [folder_id],
-            'description': f'Title: {title} | Category: {category}'
+            'description': f'Section: {SECTION_PREFIX} | Title: {title} | Category: {category}'
         }
         
         media = MediaIoBaseUpload(
@@ -760,11 +760,13 @@ async def list_files(
                 pageSize=200,
                 fields="files(id, name, mimeType, size, createdTime, webViewLink, description)"
             ).execute()
-            # Only return files uploaded through this app (they always have 'Title:' in description)
-            files = [
-                f for f in results.get('files', [])
-                if f.get('description') and 'Title:' in f['description']
-            ]
+            # Only return files for this section (SOW2) uploaded through this app
+            files = []
+            for f in results.get('files', []):
+                description = f.get('description') or ''
+                desc_lower = description.lower()
+                if f'section: {SECTION_PREFIX}'.lower() in desc_lower and 'title:' in desc_lower:
+                    files.append(f)
             for f in files:
                 f['_uploaded_by'] = email
             return files
