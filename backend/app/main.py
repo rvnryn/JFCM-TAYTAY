@@ -47,8 +47,22 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+# Build CORS allowlist from env plus hard-coded known frontends
+FRONTEND_URL = os.getenv("FRONTEND_URL", "")
 ALLOWED_ORIGINS = [origin.strip() for origin in FRONTEND_URL.split(",") if origin.strip()]
+
+# Always allow local dev + deployed Vercel frontend
+DEFAULT_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+    "https://jfcm-taytay.vercel.app",
+]
+
+for origin in DEFAULT_ALLOWED_ORIGINS:
+    if origin not in ALLOWED_ORIGINS:
+        ALLOWED_ORIGINS.append(origin)
 
 app.add_middleware(
     CORSMiddleware,
